@@ -1,6 +1,6 @@
 # 历史应用：执行控制协议
 
-> **待迁移历史实现，不是 HiveFlow 目标规范。** 下文仅保留旧常驻应用/本地试验的格式和约束，其中开关、JSON 与“当前”等措辞不代表本轮已部署或已完成原生智能体适配。不得据本页启用应用或执行任务。目标流程见 [核心规范](WORKFLOW.md)，线上现状、主动通知门槛与切换/回滚见 [迁移清单](MIGRATION.md)。规范不提供平台许可或用户授权。
+> **保留的历史应用实现，不是 HiveFlow 目标规范。** 下文仅保留旧常驻应用/本地试验的格式和约束，其中开关、JSON 与“当前”等措辞不代表本轮已部署或已完成原生智能体适配。不得据本页启用应用或执行任务。目标流程见 [核心规范](WORKFLOW.md)，已完成切换、当前验收边界与回滚见 [迁移清单](MIGRATION.md)。规范不提供平台许可或用户授权。
 
 This is a local, opt-in state protocol for a trusted parent controller. It does not call `cloud_threads`, create tasks, run commands, push commits, publish, or deploy. See [manual execution boundaries](MANUAL_EXECUTION.md). The deployment flag enables request/control processing only; it proves neither adapter readiness nor permission to execute an Issue.
 
