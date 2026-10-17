@@ -62,7 +62,7 @@ test('manual dispatch requires authenticated owner, execution grant, fresh quota
   const claim = f.c.dispatch(f.args(id));
   assert.equal(claim.repo, 'org/repo'); assert.equal(claim.issue_id, '123'); assert.equal(claim.revision, 1);
   assert.throws(() => f.c.dispatch(f.args(id)), /active_claim/);
-  f.c.finish({ actor: 'owner', claimId: claim.id, outcome: 'completed' });
+  f.c.finish({ actor: 'owner', claimId: claim.id, outcome: 'completed', workerStopped: true });
   assert.throws(() => f.c.dispatch(f.args(id)), /invalid_execution_grant/);
 });
 
@@ -91,7 +91,7 @@ for (const mode of ['checkpoint', 'finish-current']) test(`stop ${mode} immediat
   assert.throws(() => f.c.reserveScan(queued), /stale_generation/);
   assert.throws(() => f.c.dispatch(queued), /stale_generation/);
   assert.throws(() => f.c.dispatch(f.args(id)), /workflow_stopped/);
-  f.c.finish({ actor: 'owner', claimId: claim.id, outcome: mode === 'checkpoint' ? 'checkpoint' : 'completed' });
+  f.c.finish({ actor: 'owner', claimId: claim.id, outcome: mode === 'checkpoint' ? 'checkpoint' : 'completed', workerStopped: true });
   assert.equal(f.c.status().mode, 'stopped');
   assert.equal(f.c.status().claim?.status ?? null, mode === 'checkpoint' ? 'needs_review' : null);
 });
@@ -120,7 +120,7 @@ test('independent connections preserve the occupied slot; restart never frees it
   const reopened = f.open();
   assert.equal(reopened.status().claim.id, claim.id);
   assert.throws(() => reopened.dispatch({ actor: 'owner', generation: 0, quota: { remainingPercent: 50, observedAt: f.now() }, grantId: id }), /active_claim/);
-  assert.throws(() => reopened.finish({ actor: 'owner', claimId: claim.id, outcome: 'completed' }), /claim_needs_review/);
+  assert.throws(() => reopened.finish({ actor: 'owner', claimId: claim.id, outcome: 'completed', workerStopped: true }), /claim_needs_review/);
   assert.throws(() => reopened.resolveClaim({ actor: 'owner', claimId: claim.id, note: 'Unchecked' }), /review_required/);
   reopened.resolveClaim({ actor: 'owner', claimId: claim.id, workerStopped: true, note: 'Worker stopped; changes inspected' });
   assert.equal(reopened.status().claim, null); assert.equal(reopened.status().mode, 'stopped');
@@ -248,4 +248,22 @@ test('one revision grant permits an exact approved edit-and-test bundle, never d
   for (const operation of ['open-draft-pr', 'commit', 'push', 'merge', 'deploy']) {
     assert.throws(() => f.c.authorizeStep({ actor: 'owner', claimId: claim.id, operation, quota: f.args().quota }), /operation_not_granted/);
   }
+});
+
+test('completed claim requires explicit verified worker stop before releasing slot', t => {
+  const f = fixture(t), id = f.grant(), claim = f.c.dispatch(f.args(id));
+  for (const workerStopped of [undefined, false, 'true', 1]) {
+    assert.throws(() => f.c.finish({ actor: 'owner', claimId: claim.id, outcome: 'completed', workerStopped }), /terminal_confirmation_required/);
+    assert.equal(f.c.status().claim.id, claim.id);
+    assert.equal(f.c.status().claim.status, 'claimed');
+  }
+  assert.equal(f.open().status().claim.id, claim.id);
+  f.c.finish({ actor: 'owner', claimId: claim.id, outcome: 'completed', workerStopped: true });
+  assert.equal(f.c.status().claim, null);
+});
+for (const outcome of ['failed', 'checkpoint']) test(`${outcome} retains claim without worker stop confirmation`, t => {
+  const f = fixture(t), id = f.grant(), claim = f.c.dispatch(f.args(id));
+  f.c.finish({ actor: 'owner', claimId: claim.id, outcome });
+  assert.equal(f.c.status().claim.id, claim.id);
+  assert.equal(f.c.status().claim.status, 'needs_review');
 });

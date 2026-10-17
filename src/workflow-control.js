@@ -225,11 +225,14 @@ export class WorkflowControl {
   }
   /** A trusted adapter reports completion, checkpoint, or uncertainty. Only normal
    * completion frees the slot; checkpoint/failed work requires explicit review. */
-  finish({ actor, claimId, outcome }) {
+  finish({ actor, claimId, outcome, workerStopped }) {
     this.auth(actor); requireThat(['completed', 'checkpoint', 'failed'].includes(outcome), 'invalid_outcome');
     return this.tx(() => {
       const c = this.get('SELECT * FROM workflow_claims WHERE id=? AND slot=1', claimId);
       requireThat(c && c.instance === this.instance && c.status === 'claimed', 'claim_needs_review');
+      // The trusted adapter must verify actual worker termination first; a
+      // completion label alone must never free capacity for overlapping work.
+      requireThat(outcome !== 'completed' || workerStopped === true, 'terminal_confirmation_required');
       this.run('UPDATE workflow_claims SET status=?, slot=? WHERE id=?', outcome === 'completed' ? 'completed' : 'needs_review', outcome === 'completed' ? null : 1, claimId);
     });
   }

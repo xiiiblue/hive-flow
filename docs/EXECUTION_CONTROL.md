@@ -34,9 +34,10 @@ IDs are 1–200 characters from letters, digits, underscore, dot, colon, and hyp
 | `status` | none | Reports only the specified bound attempt |
 | `stop` | none | Durably requests a cooperative stop; does not kill a worker or free the slot |
 | `unknown` | none | Records uncertainty and retains the occupied slot |
+| `report` | `report` | Persists one immutable bounded controller evidence report per attempt; queues an owner-private result, without changing state or releasing the slot |
 | `terminal` | `outcome`, `worker_stopped` | Releases only after explicit verification; outcome is `stopped` or `completed`, and `worker_stopped` must be `true` |
 
-`quota` is exactly `{"remainingPercent":50,"observedAt":1700000000000}` or `null` for unavailable quota. The trusted controller must obtain verified provider/account data and supply the minimum percentage across applicable finite windows. Numeric remaining quota must be greater than 5 and at most 100; observation must not be future-dated or older than 60 seconds. User or Issue text is never a quota source. A low/stale/unknown running checkpoint durably latches stop; a later fresh reading does not resume it.
+`quota` is exactly `{"remainingPercent":50,"observedAt":1700000000000}` or `null` for unavailable quota. The trusted controller must obtain verified provider/account data and supply the minimum percentage across applicable finite windows. Numeric remaining quota must be greater than 5 and at most 100; observation must not be future-dated or older than 60 seconds. User or Issue text is never a quota source. A low/stale/unknown start or running checkpoint durably latches stop; a later fresh reading does not resume it.
 
 `operation` is one of `edit-code`, `run-tests`, `commit`, `push`, `open-pr`, `merge`, or `deploy`, and must be present in this exact approved grant. `files` lists exact approved relative paths; no globs, traversal, Git metadata, or credential paths. The actual adapter must still enforce repository, pinned base commit, symlink/real-path scope, and safe test commands. A stored scope is not a sandbox.
 
@@ -75,10 +76,27 @@ Expiry and supersession block new execution stages. Known task identity, status,
 
 The command audit, state transition, and Slack acknowledgement outbox entry commit in one shared-Store transaction. Acknowledgements are authored by the bridge and posted to the **original execution-plan thread**, never the control-message root. Their metadata event type is `hiveflow_execution_control_result`; event payload includes the common IDs, `ok`, and either `state` or `error`. Reject messages with the wrong bridge identity, plan, grant, controller, attempt, or command.
 
-An identical duplicate command returns its prior acceptance without re-running the operation or queuing another acknowledgement. Reusing a command ID with a different body is rejected. Repeating `start` with a new command ID after the grant is consumed produces `dispatch_already_started`, never another creation permit. A failed outbox insertion rolls the state change back.
+An identical duplicate command returns its prior acceptance without re-running the operation or queuing another acknowledgement. Reusing a command ID with a different body is rejected. Repeating `start` with a new command ID after the grant is consumed produces `dispatch_already_started`, never another creation permit. A failed outbox insertion rolls the state change back. Each control acknowledgement uses a command-specific Slack lane so a stale/unknown execution trigger cannot block recovery acknowledgement; its original root and channel remain pinned. Owner-private result delivery keeps the transport’s strict owner lane and never falls back to a group or alternate recipient.
 
 For every externally mutating stage (including commit, push, PR creation, merge, and deploy), the parent must persist a unique stage intent and correlate that intent with exactly one external action. A checkpoint is a permission gate, not an exactly-once side-effect ledger: a fresh command ID can obtain another checkpoint, but it does not authorize blindly repeating an uncertain action. Reconcile actual repository/PR/service state before any retry; record `unknown` and stop progressing when the result cannot be established.
 
 The parent must persist its own external-create intent and correlate an acknowledged first `start` with exactly one `cloud_threads.create` call. Duplicate/delayed acknowledgements never authorize a second call. A timeout, missing acknowledgement, process restart, or uncertain create response must **not** trigger automatic replay. Inspect the persisted bound attempt and external task state; use `unknown` if unresolved. The slot has no lease and never expires automatically. A different controller cannot reclaim it.
 
 Do not assert `worker_stopped:true` because a controller timed out, a task window closed, or a stop was merely requested. Verify the worker is terminal (or verify no task was created), then explicitly reconcile. This protocol provides cooperative checkpoints, not instantaneous cancellation.
+
+
+## Durable execution evidence
+
+Before `terminal` with `outcome:completed`, the same authenticated controller must submit `report` with exactly these fields:
+
+```json
+{"outcome":"completed","summary":"Updated the approved documentation.","completed_operations":["edit-code","run-tests"],"verification":["Agreed tests passed on the inspected diff."],"artifacts":[{"kind":"diff","ref":"README.md: 2 changed lines"}],"remaining":[]}
+```
+
+The example is synthetic. Outcome is `completed`, `stopped`, or `blocked`. Summary is at most 600 UTF-8 bytes. Verification and remaining each allow at most 10 nonempty single-line strings of at most 500 bytes. Artifacts allow at most 10 exact `{kind,ref}` objects; kind is `diff`, `test`, `commit`, `pr`, `deployment`, or `rollback`, and ref is a nonempty single-line string of at most 500 bytes. Completed operations must be unique and a subset of the original grant. A completed report must cover every granted operation before insertion; an incomplete completed report is rejected without consuming the immutable result slot. References are inert evidence labels, never commands, fetched URLs, or new destinations.
+
+The controller must redact credentials and unnecessary private data before submission. These bounds are not a secret scanner; do not submit raw logs or credentials. Actual diff/test/head/PR/deployment verification remains the trusted controller's responsibility. The report is an audit claim, not independent proof or new authority.
+
+`execution_results` persists plan, grant, controller, attempt, owner, channel, original request/root, canonical report, and creation time. Identical reports are idempotent even with a new command ID; conflicting reports are rejected and never overwrite the original. An incorrect final record requires a separately approved new attempt, not mutation or automatic retry of an old grant. Result insertion and owner-private outbox insertion are atomic. At most one logical owner notification is queued per report (possibly split into transport-sized parts); delivery retries retain the transport's existing guarantees. No group notification or GitHub write is added.
+
+Reports remain recordable after expiry, supersession, stop, or unknown state for recovery. A report alone never releases the slot, changes status, or resumes work. Completed terminal reconciliation requires a persisted matching completed report with verification, no remaining work, and every originally granted operation listed as completed, plus the existing running-task and explicitly verified worker-terminal requirements. Stopped reconciliation remains available without a report so uncertainty or a never-created task can be safely stopped; the controller should record blockers and evidence whenever available. Owner queries can read the durable report after restart.

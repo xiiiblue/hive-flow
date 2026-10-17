@@ -1,3 +1,4 @@
+import { initializeOwnerCommands, receiveOwnerCommand } from './owner-commands.js';
 import { initializeExecutionControl, receiveExecutionControl } from './execution-control.js';
 import { ManualDispatch } from './manual-dispatch.js';
 import { randomUUID } from 'node:crypto';
@@ -86,6 +87,7 @@ export class IssueReviewApplication {
     store.transaction(() => {
       initializeExecutionRequests(store);
       initializeExecutionControl(store);
+      initializeOwnerCommands(store);
       store.db.exec(`
       CREATE TABLE IF NOT EXISTS issue_proposals (id TEXT PRIMARY KEY, request TEXT UNIQUE NOT NULL, repo TEXT NOT NULL, issue_id TEXT NOT NULL, issue_number INTEGER NOT NULL, revision INTEGER NOT NULL, snapshot TEXT NOT NULL, owner TEXT NOT NULL, channel TEXT NOT NULL, root TEXT NOT NULL, created INTEGER NOT NULL, status TEXT NOT NULL, UNIQUE(repo,issue_id,revision));
       CREATE TABLE IF NOT EXISTS issue_decisions (proposal TEXT PRIMARY KEY, decision TEXT NOT NULL, reason TEXT NOT NULL, actor TEXT NOT NULL, source TEXT UNIQUE NOT NULL, created INTEGER NOT NULL);
@@ -98,6 +100,8 @@ export class IssueReviewApplication {
     return receiveIssue(bridge, event, this.config.issueRepository);
   }
   receiveOwnerText(bridge, text, source, now) {
+    const ownerCommand = receiveOwnerCommand(bridge, text, source, now, this.config.issueRepository);
+    if (ownerCommand !== null) return ownerCommand;
     const details = receiveExecutionDetails(bridge, text, now, this.config.issueRepository);
     if (details !== null) return details;
     const execution = receiveExecutionCommand(bridge, text, source, now, this.config.issueRepository, this.manualExecutionEnabled ? this.dispatch : null);

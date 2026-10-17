@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Store } from 'wecom-slack-bridge/store';
 import { Bridge } from 'wecom-slack-bridge/bridge';
 import { IssueReviewApplication } from '../src/issue-review.js';
+import { validExecutionReport } from '../src/execution-results.js';
 import { parseExecutionControl, initializeExecutionControl } from '../src/execution-control.js';
 const repository = 'example/project';
 const plan = { repo: repository, issue_id: '9001', issue_number: 12, version: 1, base_sha: 'a'.repeat(40), files: ['README.md'], operations: ['edit-code', 'run-tests'], summary: 'Update documentation', expires: 200000 };
@@ -21,7 +22,7 @@ async function fixture(t, ready = true, planExtra = {}) {
   const row = store.get('SELECT * FROM execution_plans');
   bridge.receiveWecom({ body: { aibotid: 'test-bot', msgid: 'approval', msgtype: 'text', chattype: 'single', from: { userid: 'owner' }, text: { content: `/execute #12 v1 ${row.id}` } } }); await bridge.drain();
   const grant = store.get('SELECT * FROM execution_requests'); posted.length = 0;
-  return { store, bridge, application, posted, row, grant, advance(ms) { time += ms; },
+  return { dir, store, bridge, application, posted, row, grant, advance(ms) { time += ms; },
     command(action, extra = {}) { return { command_id: `command-${++seq}`, action, plan_id: row.id, grant_id: grant.id, controller_run_id: 'controller-1', attempt_id: 'attempt-1', ...extra }; },
     send(p, extra = {}) { return bridge.receiveSlack({ type: 'message', channel: 'C123', bot_id: 'BDOT', ts: `200.${++seq}`, text: '[wecom:execution-control]' + JSON.stringify(p), ...extra }); },
     quota() { return { remainingPercent: 50, observedAt: time }; },
@@ -42,6 +43,7 @@ test('trusted new-root dispatch protocol acknowledges original root and consumes
   f.send(f.command('started', { thread_id: 'thread-1', turn_id: 'turn-1' })); await f.bridge.drain();
   f.send(f.command('checkpoint', { operation: 'run-tests', files: ['README.md'], quota: f.quota() })); await f.bridge.drain(); assert.equal(f.result().ok, true);
   assert.ok(f.posted.every(p => p.thread_ts === '100.1' && p.channel === 'C123' && p.metadata.event_type === 'hiveflow_execution_control_result'));
+  f.send(f.command('report', { report: completedReport() })); await f.bridge.drain();
   f.send(f.command('terminal', { outcome: 'completed', worker_stopped: true })); await f.bridge.drain(); assert.equal(f.application.dispatch.status().active, null);
 });
 test('untrusted, threaded, disabled and mismatched binding controls cannot mutate state', async t => {
@@ -101,4 +103,68 @@ test('delivery checkpoints bind full approved targets and cannot substitute bran
   }
   f.send(f.command('checkpoint', { operation: 'deploy', files: ['README.md'], quota: f.quota(), delivery: { ...delivery, deployment: { ...delivery.deployment, environment: 'other' } } })); await f.bridge.drain();
   assert.equal(f.result().error, 'delivery_scope_mismatch');
+});
+
+const completedReport = () => ({ outcome: 'completed', summary: 'Updated synthetic documentation.', completed_operations: ['edit-code', 'run-tests'], verification: ['Synthetic tests: 2 passed.'], artifacts: [{ kind: 'diff', ref: 'README.md: 2 changed lines' }], remaining: [] });
+async function running(f) {
+  f.send(f.command('reserve')); await f.bridge.drain();
+  f.send(f.command('start', { quota: f.quota() })); await f.bridge.drain();
+  f.send(f.command('started', { thread_id: 'thread-1', turn_id: 'turn-1' })); await f.bridge.drain();
+}
+test('final reports persist and enqueue once, remain evidence only, and completed requires them', async t => {
+  const f = await fixture(t); await running(f);
+  f.send(f.command('terminal', { outcome: 'completed', worker_stopped: true })); await f.bridge.drain();
+  assert.equal(f.result().error, 'completion_evidence_required');
+  const priorOwnerJobs = f.store.get("SELECT count(*) n FROM jobs WHERE direction='wecom'").n;
+  const report = completedReport();
+  f.send(f.command('report', { report })); await f.bridge.drain();
+  assert.equal(f.result().ok, true); assert.equal(f.application.dispatch.status().active.status, 'running');
+  const row = f.store.get('SELECT * FROM execution_results');
+  assert.equal(row.root, f.row.root); assert.equal(row.owner, 'owner'); assert.equal(row.request, f.row.request);
+  const jobs = () => f.store.all("SELECT * FROM jobs WHERE direction='wecom' ORDER BY id").slice(priorOwnerJobs);
+  assert.equal(jobs().length, 1); assert.equal(jobs()[0].lane, 'owner'); assert.equal(jobs()[0].target, 'owner');
+  f.send(f.command('report', { report: { ...report, completed_operations: [...report.completed_operations].reverse(), artifacts: [{ ref: report.artifacts[0].ref, kind: 'diff' }] } })); await f.bridge.drain();
+  assert.equal(f.result().ok, true); assert.equal(jobs().length, 1);
+  f.send(f.command('report', { report: { ...report, summary: 'Conflicting report.' } })); await f.bridge.drain();
+  assert.equal(f.result().error, 'immutable_execution_result_mismatch'); assert.equal(jobs().length, 1);
+  f.send(f.command('terminal', { outcome: 'completed', worker_stopped: true })); await f.bridge.drain();
+  assert.equal(f.application.dispatch.status().active, null);
+  await f.bridge.stop(); f.store.close(); f.store.close = () => {};
+  const reopened = new Store(f.dir); assert.equal(reopened.get('SELECT report FROM execution_results').report, row.report); reopened.close();
+});
+test('report rejects forged identity, extra fields, broadened operations and incomplete completion', async t => {
+  const f = await fixture(t); await running(f);
+  for (const extra of [{ bot_id: 'OTHER' }, { channel: 'OTHER' }, { thread_ts: f.row.root }]) assert.equal(f.send(f.command('report', { report: completedReport() }), extra), false);
+  assert.equal(f.send(f.command('report', { controller_run_id: 'other', report: completedReport() })), false);
+  for (const report of [{ ...completedReport(), target: 'group' }, { ...completedReport(), verification: [] }, { ...completedReport(), summary: 'x'.repeat(601) }, { ...completedReport(), artifacts: [{ kind: 'raw-log', ref: 'log' }] }]) assert.equal(f.send(f.command('report', { report })), false);
+  f.send(f.command('report', { report: { ...completedReport(), completed_operations: ['deploy'] } })); await f.bridge.drain(); assert.equal(f.result().error, 'result_operation_not_granted');
+  assert.equal(f.store.get('SELECT count(*) n FROM execution_results').n, 0);
+  f.send(f.command('report', { report: { ...completedReport(), completed_operations: ['edit-code'] } })); await f.bridge.drain();
+  assert.equal(f.result().error, 'completion_evidence_required');
+  assert.equal(f.store.get('SELECT count(*) n FROM execution_results').n, 0);
+  f.send(f.command('report', { report: completedReport() })); await f.bridge.drain(); assert.equal(f.result().ok, true);
+  f.send(f.command('terminal', { outcome: 'completed', worker_stopped: true })); await f.bridge.drain(); assert.equal(f.result().ok, true);
+});
+test('unknown and expired reports never release slot, and report enqueue failure rolls back', async t => {
+  const f = await fixture(t); await running(f);
+  f.send(f.command('unknown')); await f.bridge.drain(); f.advance(100001);
+  const old = f.store.addJob; f.store.addJob = () => { throw new Error('enqueue failure'); };
+  assert.throws(() => f.send(f.command('report', { report: completedReport() })), /enqueue failure/); f.store.addJob = old;
+  assert.equal(f.store.get('SELECT count(*) n FROM execution_results').n, 0);
+  f.send(f.command('report', { report: completedReport() })); await f.bridge.drain(); assert.equal(f.result().ok, true);
+  assert.equal(f.application.dispatch.status().active.status, 'unknown');
+  f.send(f.command('terminal', { outcome: 'completed', worker_stopped: true })); await f.bridge.drain(); assert.equal(f.result().error, 'completion_not_confirmed');
+});
+
+test('recovery acknowledgements bypass a stale trigger without changing original root', async t => {
+  const f = await fixture(t); await running(f);
+  f.store.run("INSERT INTO jobs(request,direction,payload,status,lane,target,expires) VALUES (?, 'slack', '{}', 'unknown', 'slack', 'C123', ?)", f.row.request, 999999);
+  f.posted.length = 0;
+  f.send(f.command('report', { report: completedReport() })); await f.bridge.drain();
+  assert.equal(f.posted.length, 1); assert.equal(f.posted[0].thread_ts, f.row.root);
+  assert.equal(f.posted[0].metadata.event_payload.action, 'report');
+});
+
+test('direct report validator rejects sparse evidence arrays', () => {
+  assert.equal(validExecutionReport({ ...completedReport(), verification: Array(1) }), false);
 });

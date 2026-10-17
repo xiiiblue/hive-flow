@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/issue-review.js && node --check src/workflow-control.js && node --check src/execution-requests.js && node --check src/execution-scope.js && node --check src/manual-dispatch.js && node --check src/execution-control.js && node --test",
+    "check": "node --check src/main.js && node --check src/issue-review.js && node --check src/workflow-control.js && node --check src/execution-requests.js && node --check src/execution-scope.js && node --check src/manual-dispatch.js && node --check src/execution-control.js && node --check src/owner-commands.js && node --check src/execution-results.js && node --test",
     "start": "node --env-file-if-exists=.env src/main.js"
   },
   "dependencies": {

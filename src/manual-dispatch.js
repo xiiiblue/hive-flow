@@ -95,7 +95,7 @@ export class ManualDispatch {
    * second create. Crash after commit is uncertain and retains the slot forever
    * until explicit reconciliation; there is no lease, retry, or restart takeover. */
   startDispatch(args) {
-    return this.transaction(() => {
+    return this.withQuotaStop(args, () => {
       const a = this.active(args);
       demand(a.status === 'reserved', 'dispatch_already_started');
       const g = this.grant(a); demand(!g.used, 'grant_consumed'); this.quota(args.quota);
@@ -125,12 +125,17 @@ export class ManualDispatch {
   /** Cooperative checkpoint immediately before every stage. Does not interrupt
    * an in-flight side effect. Actual repository/path enforcement is adapter-owned. */
   checkpoint(args) {
+    return this.withQuotaStop(args, () => this.checkpointInTransaction(args));
+  }
+  // Both pre-dispatch and running quota failures latch a stop. Identity/state
+  // checks run before quota validation, so a rejected caller cannot stop a peer.
+  withQuotaStop(args, fn) {
     const result = this.transaction(() => {
-      try { return { value: this.checkpointInTransaction(args) }; }
+      try { return { value: fn() }; }
       catch (error) {
         if (!['quota_unknown_or_stale', 'quota_too_low'].includes(error.message)) throw error;
-        // Persist the pause despite rejection. A fresh quota snapshot is not a
-        // resume authorization; stop requires explicit terminal reconciliation.
+        // A fresh quota snapshot is not resume authorization. Retain the slot
+        // until the trusted controller verifies terminal/no-worker state.
         this.store.run('UPDATE manual_dispatch_attempts SET stop_requested=1,updated=? WHERE attempt_id=? AND slot=1', this.now(), args.attemptId);
         return { error };
       }

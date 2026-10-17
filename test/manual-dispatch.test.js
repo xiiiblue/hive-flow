@@ -53,15 +53,54 @@ test('reserve is quota-free, atomic single slot and idempotent only for same con
   assert.throws(() => f.c.reserve({ attemptId: 'attempt-2', controllerRunId: 'controller-2', grantId: 'grant-2' }), /pipeline_busy/);
   assert.equal(f.c.status().executorImplemented, false);
 });
-test('quota must be fresh numeric verified-adapter minimum-window percentage strictly above 5', t => {
+for (const [label, quota, error] of [
+  ['unknown', null, /quota_unknown_or_stale/],
+  ['non-numeric', { remainingPercent: '50', observedAt: 100000 }, /quota_unknown_or_stale/],
+  ['NaN', { remainingPercent: NaN, observedAt: 100000 }, /quota_unknown_or_stale/],
+  ['out of range', { remainingPercent: 101, observedAt: 100000 }, /quota_unknown_or_stale/],
+  ['future', { remainingPercent: 50, observedAt: 100001 }, /quota_unknown_or_stale/],
+  ['stale', { remainingPercent: 50, observedAt: 39999 }, /quota_unknown_or_stale/],
+  ['zero', { remainingPercent: 0, observedAt: 100000 }, /quota_too_low/],
+  ['threshold', { remainingPercent: 5, observedAt: 100000 }, /quota_too_low/],
+]) test(`start ${label} quota latches stop across restart without consuming grant`, t => {
   const f = fixture(t); f.grant(); f.reserve();
-  for (const quota of [null, { remainingPercent: '50', observedAt: 100000 }, { remainingPercent: NaN, observedAt: 100000 }, { remainingPercent: 101, observedAt: 100000 }, { remainingPercent: 50, observedAt: 100001 }, { remainingPercent: 50, observedAt: 39999 }]) assert.throws(() => f.c.startDispatch({ ...f.ids, quota }), /quota_unknown_or_stale/);
-  for (const remainingPercent of [0, 5]) assert.throws(() => f.c.startDispatch({ ...f.ids, quota: { remainingPercent, observedAt: 100000 } }), /quota_too_low/);
+  assert.throws(() => f.c.startDispatch({ ...f.ids, quota }), error);
   assert.equal(f.store.get('SELECT used FROM manual_execution_grants').used, 0);
+  assert.equal(f.c.status().active.stop_requested, 1);
+  assert.equal(f.c.status().active.status, 'reserved');
+  assert.equal(f.c.status().active.thread_id, null);
+  f.restart();
+  assert.throws(() => f.start(), /stop_requested/);
+  assert.equal(f.c.status().active.slot, 1);
+  f.c.confirmTerminal({ attemptId: f.ids.attemptId, outcome: 'stopped', workerStopped: true });
+  assert.equal(f.c.status().active, null);
+  assert.throws(() => f.c.reserve({ grantId: 'grant-1', attemptId: 'new-attempt', controllerRunId: 'controller-1' }), /grant_already_reserved/);
+});
+test('valid boundary quota starts once; wrong controller cannot latch a stop', t => {
+  const f = fixture(t); f.grant(); f.reserve();
+  assert.throws(() => f.c.startDispatch({ ...f.ids, controllerRunId: 'other', quota: null }), /controller_mismatch/);
+  assert.equal(f.c.status().active.stop_requested, 0);
   f.c.startDispatch({ ...f.ids, quota: { remainingPercent: 5.01, observedAt: 40000 } });
   assert.equal(f.store.get('SELECT used FROM manual_execution_grants').used, 1);
   assert.equal(f.c.status().active.status, 'dispatch_started');
   assert.throws(() => f.start(), /dispatch_already_started/);
+});
+test('composed start quota failure commits with rejection, rolls back with failed outbox', t => {
+  const f = fixture(t); f.grant(); f.reserve();
+  assert.throws(() => f.store.transaction(() => {
+    assert.throws(() => f.c.executeInTransaction('startDispatch', { ...f.ids, quota: null }), /quota_unknown_or_stale/);
+    assert.equal(f.c.status().active.stop_requested, 1);
+    throw new Error('outbox_failure');
+  }), /outbox_failure/);
+  assert.equal(f.c.status().active.stop_requested, 0);
+  f.store.transaction(() => {
+    assert.throws(() => f.c.executeInTransaction('startDispatch', { ...f.ids, quota: null }), /quota_unknown_or_stale/);
+    f.store.addJob('r', 'slack', { text: 'quota_unknown_or_stale' });
+  });
+  f.restart();
+  assert.equal(f.c.status().active.stop_requested, 1);
+  assert.equal(f.store.get('SELECT COUNT(*) AS n FROM jobs').n, 1);
+  assert.throws(() => f.start(), /stop_requested/);
 });
 test('restart and uncertain task creation retain slot and never replay', t => {
   const f = fixture(t); f.grant(); f.reserve(); f.start(); f.restart();
@@ -82,6 +121,7 @@ test('record exact task identity then enforce every stage scope and quota', t =>
   f.c.recordStarted({ ...f.ids, threadId: 'thread-1', turnId: 'turn-1' });
   assert.equal(f.checkpoint().plan.base_sha, 'a'.repeat(40));
   assert.throws(() => f.checkpoint({ operation: 'open-draft-pr' }), /operation_not_granted/);
+  for (const operation of ['commit', 'push', 'open-pr', 'merge', 'deploy']) assert.throws(() => f.checkpoint({ operation, delivery: delivery() }), /operation_not_granted/);
   assert.throws(() => f.checkpoint({ files: ['src/b.js'] }), /file_not_granted/);
   assert.throws(() => f.checkpoint({ quota: null }), /quota_unknown_or_stale/);
   assert.throws(() => f.checkpoint(), /stop_requested/);

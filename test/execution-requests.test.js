@@ -115,7 +115,6 @@ test('trusted ready path atomically grants exact plan, emits dispatch request, a
   assert.equal(f.store.get('SELECT count(*) n FROM manual_dispatch_attempts').n, 0);
   const args = { grantId: payload.grant_id, controllerRunId: 'synthetic-controller', attemptId: 'synthetic-attempt' };
   assert.equal(dispatch.reserve(args).status, 'reserved');
-  assert.throws(() => dispatch.startDispatch({ ...args, quota: { remainingPercent: 5, observedAt: 100000 } }), /quota_too_low/);
   assert.equal(f.store.get('SELECT used FROM manual_execution_grants').used, 0);
   assert.equal(dispatch.startDispatch({ ...args, quota: { remainingPercent: 90, observedAt: 100000 } }).status, 'dispatch_started');
   assert.throws(() => dispatch.startDispatch({ ...args, quota: { remainingPercent: 90, observedAt: 100000 } }), /dispatch_already_started/);
@@ -125,6 +124,19 @@ test('trusted ready path atomically grants exact plan, emits dispatch request, a
   dispatch.confirmTerminal({ attemptId: args.attemptId, outcome: 'completed', workerStopped: true });
   assert.equal(dispatch.status().active, null);
   assert.equal(f.bridge.receiveWecom(frame(f.command(), 'again')), false);
+});
+test('ready grant low quota stops reserved attempt and fresh quota cannot resume it', async t => {
+  const f = fixture(t, { manualExecutionEnabled: true }); f.bridge.receiveSlack(event()); await f.bridge.drain();
+  assert.equal(f.bridge.receiveWecom(frame(f.command(), 'ready-low-quota')), true); await f.bridge.drain();
+  const payload = f.posted[0].metadata.event_payload, dispatch = f.application.dispatch;
+  const args = { grantId: payload.grant_id, controllerRunId: 'synthetic-controller', attemptId: 'synthetic-attempt' };
+  dispatch.reserve(args);
+  assert.throws(() => dispatch.startDispatch({ ...args, quota: { remainingPercent: 5, observedAt: 100000 } }), /quota_too_low/);
+  assert.equal(f.store.get('SELECT used FROM manual_execution_grants').used, 0);
+  assert.equal(dispatch.status().active.stop_requested, 1);
+  assert.equal(dispatch.status().active.slot, 1);
+  assert.throws(() => dispatch.startDispatch({ ...args, quota: { remainingPercent: 90, observedAt: 100000 } }), /stop_requested/);
+  assert.equal(dispatch.status().active.thread_id, null);
 });
 test('ready grant and request rollback with outbox; new plan revokes and stops old scope', async t => {
   const f = fixture(t, { manualExecutionEnabled: true }); f.bridge.receiveSlack(event()); await f.bridge.drain();
