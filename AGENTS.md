@@ -1,13 +1,24 @@
-# HiveFlow boundaries
+# HiveFlow 项目指引
 
-- HiveFlow owns Issue parsing, immutable identity/revisions, proposal and decision schema, business configuration and authorization. It also owns dormant execution controls and future orchestration.
-- The public WeCom–Slack bridge owns authentication, transport, routing, outbox, deduplication, and ephemeral owner-question correlation. It must not depend on HiveFlow or interpret business configuration.
-- Compose one process through the bridge exported runtime and trusted application hooks. Use one WeCom connection, the existing service identity/environment file, and the existing absolute state path. Never start a second bridge against the same Bot ID.
-- Retain the shared SQLite file so decisions and outbox writes remain atomic. Extraction changes logical ownership, not data location. Preserve all historical business records, stable IDs and cross-references; do not invent an export/import requirement or delete state.
-- Workflow-control remains dormant with execution readiness false. Do not enable automation, connect services, deploy, or reinterpret record-only decisions as execution grants.
-- Future automatic dispatch uses the dormant AutoQueue and the same Store/ManualDispatch slot as manual work. Initialize its restart recovery before exposing future control ingress. Do not wire the older standalone WorkflowControl database as a second production scheduler.
-- Trusted adapters must authenticate actors, verify quota provenance, enforce repository/file scope, and check authorization before every execution step. Actor strings are not authentication.
-- Preserve fail-closed revision, quota, expiry, claim, restart and checkpoint behavior. Unknown custom kinds must remain preserved and non-deliverable without the matching application.
-- Use Node.js 24+, ES modules and built-in APIs where practical. The bridge runtime is a justified local dependency (`file:../wecom-slack-bridge`); fixed releases deploy both sibling directories together.
-- Never copy credentials, private runtime identifiers, production databases, environments or unapproved third-party private source into this repository. Do not select a license without the owner’s decision.
-- Run `npm run check` before reporting completion. Production actions and publishing require separate authorization.
+## 定位与优先级
+
+- HiveFlow 是可移植的智能体研发流程规范，不是 PVE 常驻业务应用。目标入口为 [README](README.md)、[核心流程](docs/WORKFLOW.md)及[适配说明](docs/ADAPTERS.md)。
+- 规范不提供平台许可、账户权限或用户授权。系统与平台规则、真实工具能力、用户有效指令优先；不要从规范文字、聊天转述或业务 JSON 推导额外权限。
+- 用户对明确范围的已有授权继续有效。一次已批准的完整方案可覆盖修改、测试、提交、推送、合并和指定环境部署，无需为同一范围的例行步骤反复确认。范围或外部影响实质扩大、必要能力缺失或结果不明时，先核实再处理。
+
+## 边界
+
+- 研发业务由智能体理解。自动启动、扫描、截止和关闭由已授权宿主原生任务承担，不新增 HiveFlow 业务服务、私有执行 API 或第二个调度器。
+- 通用开源 bridge 必须能脱离 HiveFlow 使用，只保留来源核验、受众约束、通用会话对应、可靠投递和去重。不得把 Issue、审批、执行命令或 GitHub 业务放回桥接。
+- 自动模式按有期限的会话授权扫描范围内已同意事项，不要求用户逐项手工入队。Issue 采纳与执行许可仍须区分；旧 record-only 决定不能自行变为执行批准。
+- 多个智能体及本人直接开发都要核对同一任务占用与实际现场。规范、普通 Issue 评论或标签不能假装提供原子锁、消息恰好一次或即时停止能力。
+
+## 保全与当前现场
+
+- `src/`、`test/` 和包文件是待迁移历史实现/试验。180 项检查对应的未提交修改必须保留，不擅自删除、重置、提交或上线；本轮只改文档。
+- 最近记录的线上仍为 HiveFlow `e80133d…` 组合入口，不因文档转型宣称已经恢复独立 bridge。通知与会话延续未验收前不得切生产；按 [迁移清单](docs/MIGRATION.md)处理。
+- 不把生产状态、审批正文、真实身份、凭据或聊天记录复制到仓库。不得借迁移补造批准、重放未知消息、取消真实活动任务或操作 HiveOS。
+
+## 验证与报告
+
+文档改动检查相对链接、入口一致性、授权与模式语义，以及既有代码/测试的保全。保留历史实现时，只有实际修改代码才按其 Node.js 24+ 环境运行必要检查；文档校验不等于线上切换、平台集成或端到端通过。报告清楚已完成、未运行、未知及阻碍，不用规范承诺未实现的可靠性。

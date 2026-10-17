@@ -1,35 +1,27 @@
 # HiveFlow
 
-HiveFlow 是围绕 GitHub Issue 的私有协作工作流项目，沿用 ACDL 协作标准。HiveOS 是首个使用场景，不是硬编码依赖。仓库名为 `hive-flow`；本地代码变更不代表已推送、发布或部署，不假设开源许可证。
+HiveFlow 是给 dots、未来也可给 Hermes 等智能体阅读和遵循的**可移植研发流程规范**，不是运行在 PVE 上的业务应用或调度服务。HiveOS 是首个使用场景，不能写成规范的固定依赖。规范本身不提供授权：平台规则、真实工具权限和用户有效授权优先。
 
-## 当前实现与边界
+## 阅读入口
 
-HiveFlow 的组合入口导入公开 `wecom-slack-bridge/runtime`，注入可信 Issue 应用。同一进程复用桥接器的 Slack / 企业微信连接：只有一个企业微信连接，不另起机器人或第二个服务。
+- [核心流程、角色与授权](docs/WORKFLOW.md)：从反馈、采纳、执行到验收回滚。
+- [手动和自动模式](docs/AUTO_MODE.md)：由智能体原生任务管理明确期限的会话，扫描授权范围内已同意事项并推进，无需用户逐项手工入队。
+- [简洁中文交互](docs/OWNER_COMMANDS.md)：一次方案审批覆盖已列明的修改、测试及交付动作。
+- [dots / Hermes 适配](docs/ADAPTERS.md)：只使用已验证、已获授权的宿主能力，不编造集成。
+- [从当前应用迁移到规范](docs/MIGRATION.md)：保留历史、替换业务自动化、恢复独立 bridge 的具体门槛与回滚。
 
-- HiveFlow 拥有 Issue 解析、不可变身份与修订、提案/决定 schema、业务配置和权限校验。
-- 通用桥接器拥有认证、路由、发件箱、传输去重和短期本人问答关联；它不依赖 HiveFlow，不读取 `ISSUE_REPOSITORY`，也不提供 Issue 工作流。
-- Issue 决定与发件箱继续使用同一 SQLite 文件、同一事务。此提取是逻辑所有权和代码边界调整，不是物理数据搬迁；已有记录、ID、历史及待处理回复必须保留。
-- 新增独立执行方案预览及版本绑定的手动请求入口；默认执行器未接入，请求返回 `not_ready`；新增显式部署开关仅启用手动协议和独立许可，不证明外部执行器就绪或自动启动工作，见 [手动执行边界](docs/MANUAL_EXECUTION.md)。
-- `src/workflow-control.js` 仍是独立休眠控制基础，默认 `executionReady: false`，不是扫描器或执行器。现有 `decision_record_only: true` 决定永远不自动升级为执行许可。
-- 新的休眠自动队列 `src/auto-queue.js` 与手动派发共用一个 Store 和执行槽，覆盖明确入队、期限、停止及异常暂停；尚未接入本人命令、定时器或真实任务。不要把旧独立控制库接成第二个调度器。详见 [自动队列边界](docs/AUTO_MODE.md)。
+## 工具分工
 
-## 本地验证
+智能体理解研发业务，使用其已授权的 GitHub、消息、任务和开发工具执行规范。dots 的定时启动与关闭使用 dots 自身云端任务能力；不再把 HiveFlow 部署为常驻应用或新建第二个调度器。
 
-需要 Node.js 24+。两个仓库按发布版本配套放在同级目录；依赖声明为 `file:../wecom-slack-bridge`。示例部署布局是 `/opt/hive-flow` 与 `/opt/wecom-slack-bridge`，不能只复制其中一个目录。
+`wecom-slack-bridge` 是独立通用开源桥接，无 HiveFlow 也能使用。它只负责通用来源核验、固定受众、会话对应、可靠投递与去重，不解释 Issue、采纳、审批、执行、仓库或研发模式指令。用户消息由智能体理解；不得把业务处理重新塞回 bridge。
 
-```sh
-cd ../wecom-slack-bridge
-npm ci --ignore-scripts
-npm run check
-cd ../hiveflow
-npm ci --ignore-scripts
-npm run check
-```
+## 当前事实与目标不同
 
-上例本地目录名为 `hiveflow`；部署目录可使用仓库名 `hive-flow`。执行检查不会启动服务。真实凭据、主机、账户、生产配置、数据库和聊天记录不进入仓库或夹具。组合服务的 `ISSUE_REPOSITORY` 由 HiveFlow 解析，留空禁用新 Issue 入口；其余传输配置沿用桥接器，实际值只保存在已授权环境。
+规范初稿整理时，最近一次已记录部署是 bridge `7c7773c…` 与 HiveFlow `e80133d…` 的组合入口。初稿阶段未查改生产，**未卸载旧应用、未切换线上入口，也未新建或改动定时任务**。主动本人通知与会话延续尚未完成通用能力验收，不能直接切回 generic bridge 后声称审批仍可用。
 
-## 运行与切换
+`src/`、`test/`、包文件以及现存的 180 项检查成果保留为**待迁移历史实现和未部署试验**，不是目标规范所要求的运行框架。旧环境开关、SQLite 表和 JSON 控制标记不自动成为跨平台标准，也不等于平台授权。代码入口仍存在，不应仅因读到旧说明就启动它。
 
-组合服务由 HiveFlow `src/main.js` 启动。既有部署保留原服务身份、环境文件和绝对 `STATE_DIR`，只在获授权且通过离线验证后更新同一个服务的入口。不要同时运行两个仓库的 `npm start`。共享状态的单写者切换、一致备份、验收和回退见 [迁移说明](docs/MIGRATION.md)。
+[历史应用文档存档](docs/LEGACY_APPLICATION.md)、[旧手动应用协议](docs/MANUAL_EXECUTION.md)、[旧控制协议](docs/EXECUTION_CONTROL.md)仅用于保全、核验与受控回退。历史 record-only 决定永远不自动升级为执行许可。
 
-Issue 协议及控制能力边界见 [工作流约定](docs/WORKFLOW.md)。单元测试不证明生产迁移或端到端验证已经完成。部署、自动发现、执行适配器及有期限自动模式均须分别授权和验收。
+初稿阶段未提交、推送或部署变化；后续发布与实际迁移必须另有有效授权，并先完成 [迁移清单](docs/MIGRATION.md) 中的通知能力、数据、授权及工具核验。

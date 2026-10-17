@@ -1,99 +1,36 @@
-# Dormant automatic queue state
+# 有期限的自动模式
 
-This is a local, synthetic-test-only state core. `src/auto-queue.js` is not imported
-by the runtime. No owner command, environment flag, network call, timer, scanner,
-worker creation, deployment, or automatic resumption has been connected. Existing
-manual execution behavior stays unchanged for manual-owned attempts. Passing
-`enabled: true` to a test object permits state transitions only; it does not enable
-production automatic development. No actual issue is executed by these tests.
+这是供智能体遵循的目标规范，不是 PVE AutoQueue 或新调度器。**本轮未启用自动开发、未建立真实会话或定时任务。** 旧的逐项入队试验仅存于 [历史实现](LEGACY_APPLICATION.md)，不作为目标模式的使用要求。
 
-## Trusted API and authorization
+## 一次明确的会话授权
 
-Construct `AutoQueue(store, manualDispatch, { owner, repository, now, enabled })`
-with the same authoritative bridge Store and ManualDispatch object. `enabled`
-defaults to false. Owner and repository are fixed trusted configuration, not chat
-arguments. Actor strings and quota snapshots are not authentication or proof:
-a future adapter must verify the actual owner, source, immutable current plan,
-repository/file scope, delivery binding, quota provenance and execution readiness.
+用户开启前，智能体应把下列内容简洁回显并核对已有授权；不为已经明确授权的同一内容重复提问：
 
-- `start({ sessionId, actor, explicitOwnerStart: true, deadline })` records an
-  explicit owner session with a future deadline no more than seven days away.
-  Three days may be selected by a future user interface; there is no default
-  implicit authorization. Only one active session exists. IDs cannot be reused.
-- `enqueue({ sessionId, actor, grantId, explicitAutoAuthorization: true })` records
-  separately authenticated owner intent to queue that exact immutable grant.
-  It requires a matching owner and repository, an unused, unrevoked, unexpired
-  explicit execution grant, and no prior attempt. It persists owner and
-  `explicit_auto_queue` provenance. This marker does not itself authenticate the
-  caller. Review-only approvals are never read or promoted to grants.
-- Existing manual `/execute` requests are excluded by grant or plan identity at
-  enqueue and again at claim, even if their manual notification has not delivered.
-  There is no current automatic grant ingress. A future authenticated auto ingress
-  must create its own explicitly authorized immutable grant without a competing
-  manual dispatch notification; that integration is outside this change.
-- `claim({ sessionId, controllerRunId, attemptId, quota })` selects the oldest
-  eligible queued grant. Expired, revoked, consumed, attempted, or newly manual
-  candidates are marked ineligible. Exact grant IDs are globally deduplicated;
-  old queue entries never move into a later session, and neither cancellation nor
-  failure permits automatic retry. A later attempt needs a newly approved grant.
+- 开始和截止时间、时区；相对“运行三天”换算成明确截止，不设无限默认续期。
+- 固定仓库与事项选择规则，例如某标签/状态下已采纳事项，是否包含已有事项，是否允许新线索或源码巡检。
+- 允许修改的组件/路径、禁止范围、允许动作；推送/合并的目标分支及允许部署的环境、验收和回滚。
+- 并发、占用、额度门槛与读取方式，通知对象，以及中断/未知结果的处理。
 
-## One pipeline and fail-closed continuation
+一份足够明确的会话授权即可覆盖规则内的批量推进。用户不必逐个 Issue 手工入队，也不必对范围内测试、推送、合并、部署再次对话。智能体为每个选中事项准备并保存实施计划，核对它落在会话授权内；不确定或越界的事项单独暂停并解释，不能自拟更宽的许可。
 
-Queue selection and `ManualDispatch.executeInTransaction('reserve', ...)` share
-one Store transaction. There is no second pipeline lock. A manual or automatic
-reserved, dispatch-started, running, or unknown attempt holds the same existing
-single slot. Queue-write failure rolls back reservation. Claim is not dispatch
-or evidence that a worker exists. No grant is consumed until startDispatch.
+Issue 的“采纳”和旧 record-only 决定只是选择证据，不能充当执行许可。若将历史已采纳事项纳入本次会话，应另存这份新的会话授权及范围关联，保留旧决定原义。
 
-Use `executionGate({ sessionId, method: 'startDispatch' | 'checkpoint', ...args })`
-for every future auto execution stage. It verifies session membership before
-calling the existing ManualDispatch protocol in the same transaction. Scope,
-controller identity, consumed grants and delivery targets retain their existing
-checks. The tiny ManualDispatch grant guard also checks an auto-owned attempt's
-persisted session status/deadline, so a direct manual control call cannot bypass
-an expired or stopped automatic session. Session denial durably latches the
-attempt's stop flag; the control protocol recognizes it as a rejected operation.
+## 原生任务负责唤起与关闭
 
-Queued auto grants cannot be taken over by direct manual reservation. The atomic
-claim binds the queue entry before reserving; both writes commit together. Direct
-manual control quota failure, stop, unknown outcome, revoked active grant, or a
-stopped terminal outcome also pauses its bound auto session. Releasing the slot
-after an uncertain/failed/stopped task does not authorize the next queued task.
-Only a verified successful completion leaves an otherwise valid session active.
+使用智能体宿主已验证、已获授权的定时或事件任务。dots 使用自身云端任务，负责定时扫描与截止关闭；事件用于唤起核验，不直接授予执行。调度频率、事件类型和截止能力以实际平台支持为准，不照搬旧应用的扫描间隔或任意频率。
 
-Unknown, invalid, future-dated, or older-than-60-second quota, and remaining quota
-at or below five percent, pause the session durably. A fresh observation does not
-resume it. The future adapter must supply trusted live quota evidence. There is
-no job-count allowance: the bounds here are the explicit deadline, individually
-approved grants, quota, and single concurrency.
+每次唤醒核验会话仍有效、来源与规则未变、候选实际已采纳、没有重复/占用、额度和工具可用，再串行推进。人工开发也须遵守同一占用记录。查不到权威状态时不创建第二任务。
 
-`stop({ sessionId, actor })` prevents further claims immediately and latches stop
-on that session's active attempt only. Expiry is evaluated at each state access
-or execution gate; there are no background timers. Create one AutoQueue per process/controller lifetime, not per query. Creating
-another AutoQueue instance represents controller restart and durably pauses all previously active
-sessions, including when the new instance is disabled. It never adopts or replays
-an old attempt. Future integration must construct this recovery component before
-exposing any dispatch/control ingress; ManualDispatch alone cannot detect a
-process restart. Stop, expiry, quota failure and restart never release a live or
-unknown slot and never interrupt an already in-flight external side effect.
-Actual interruption/reconciliation remains the trusted controller's duty.
+截至期限或收到“停止自动”时，关闭后续扫描/领取，并通过现有任务/工作者工具协作暂停活动任务；每个实际副作用前再检查会话与停止状态。不以“定时任务应该会停”替代检查，也不承诺到点强制杀掉正在发生的外部操作。
 
-`status({ sessionId })` reports state, ordered queue and shared active attempt;
-`executorImplemented` remains false. A trusted controller must verify the worker
-stopped or was never created before using the existing terminal protocol. Neither
-completion nor improved quota renews a session. A new session requires a fresh
-explicit owner start, and no old queued grants are carried forward.
+## 暂停与恢复
 
-## Validation and remaining integration
+额度未知/不足、工作者或外部写结果不明、控制器重启失去现场，会话暂停且保留占用，先核实任务、提交和部署事实。普通可修复检查在原范围内可诊断；不得跳过必需检查去交付。持续失败或授权变化需要停止受影响工作并通知。
 
-`node --test test/auto-queue.test.js` covers synthetic owner/repository isolation,
-manual-request exclusion (including after enqueue), FIFO/deduplication, atomic
-rollback, shared-slot contention, unknown outcomes, deadline bounds, stop,
-restart, stale/low/unknown quota, durable pause and direct manual-route expiry
-fencing. `npm run check` runs the entire local suite.
+新鲜额度或迟到的 completed 消息不会重启已停止会话。恢复必须有当前有效的用户依据、明确剩余范围和实际工作者状态；新会话不自动接管旧未知任务。没有原子占用能力时不能宣称跨智能体全局单任务；没有准点关闭能力时不能承诺精确截止。
 
-Before any runtime activation, separately implement and approve authenticated
-owner commands, distinct auto-grant ingress, trusted quota retrieval, live task
-creation and cancellation, source/symlink scope checks, failure handling, result
-verification, and deployment/rollback acceptance. These tests do not establish
-that those integrations exist or that automation is ready to enable.
+## 当前缺口
+
+真实调度、领取互斥、额度读取、工作者创建与回报必须按宿主分别核验，见 [适配说明](ADAPTERS.md)。目标规范不依赖 `HIVEFLOW_AUTO_EXECUTION_ENABLED`、本地 SQL 或 `[wecom:auto-claim]`；这些属于保留的旧实现试验。
+
+主动审批通知尚未证明可由独立通用 bridge 完成。[wecom:owner] 只能依当前通用实现回复已有且未过 TTL 的通用请求，不能假定它能主动通知或无限延续会话。因此 [迁移清单](MIGRATION.md) 的能力门槛未满足前，不切换生产。
