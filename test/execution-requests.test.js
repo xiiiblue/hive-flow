@@ -19,7 +19,7 @@ function fixture(t, options = {}) {
   const deps = { config: c, now: () => time, wait: async () => {}, slack: { post: async p => { posted.push(p); return { ok: true, ts: '200.1' }; } }, wecom: { ack: async () => {}, send: async (target, text) => { sent.push({ target, text }); return { errcode: 0 }; } }, application };
   application.initialize({ store, now: () => time }); let bridge = new Bridge({ ...deps, store }); bridge.wecomReady = true;
   t.after(async () => { await bridge.stop(); store.close(); rmSync(dir, { recursive: true, force: true }); });
-  return { get bridge() { return bridge; }, get store() { return store; }, application, c, sent, posted, advance(ms) { time += ms; }, row() { return store.get('SELECT * FROM execution_plans ORDER BY version DESC LIMIT 1'); }, command(row = this.row()) { return `/execute #${row.issue_number} v${row.version} ${row.id}`; }, async restart() { await bridge.stop(); store.close(); store = new Store(dir); application.initialize({ store, now: () => time }); bridge = new Bridge({ ...deps, store }); bridge.wecomReady = true; } };
+  return { get bridge() { return bridge; }, get store() { return store; }, application, c, sent, posted, advance(ms) { time += ms; }, row() { return store.get('SELECT * FROM execution_plans ORDER BY version DESC LIMIT 1'); }, command(row = this.row()) { return `执行 #${row.issue_number} v${row.version}`; }, async restart() { await bridge.stop(); store.close(); store = new Store(dir); application.initialize({ store, now: () => time }); bridge = new Bridge({ ...deps, store }); bridge.wecomReady = true; } };
 }
 test('strict independent plan schema pins commit, exact files, operations, identity and bounded expiry', () => {
   assert.deepEqual(parseExecutionPlan(event().text, repository, 100000), plan());
@@ -39,7 +39,7 @@ test('owner explicit version-bound attempt is terminal not_ready, routes atomica
   assert.equal(f.bridge.receiveWecom(frame(command, 'other', { from: { userid: 'other' } })), false);
   f.bridge.receiveWecom(frame(command, 'group', { chattype: 'group', chatid: 'group' })); await f.bridge.drain();
   assert.equal(f.store.get('SELECT count(*) n FROM execution_requests').n, 0);
-  for (const [i, text] of [command.replace('#12', '#13'), command.replace('v1', 'v2'), command + ' yes', '/execute #12', '/execute #12 v1', '/execute\n' + command, '/execute #12 v01 ' + f.row().id].entries()) assert.equal(f.bridge.receiveWecom(frame(text, `bad-${i}`)), false);
+  for (const [i, text] of [command.replace('#12', '#13'), command.replace('v1', 'v2'), command + ' yes', '/execute #12', '/execute #12 v0', '/execute\n' + command, '/execute #12 v01 ' + f.row().id].entries()) assert.equal(f.bridge.receiveWecom(frame(text, `bad-${i}`)), false);
   f.posted.length = 0;
   assert.equal(f.bridge.receiveWecom(frame(command, 'execute')), true); await f.bridge.drain();
   assert.equal(f.posted.length, 1); assert.equal(f.posted[0].thread_ts, '100.1'); assert.equal(f.posted[0].channel, config.slackChannel);
@@ -203,7 +203,7 @@ test('one explicit owner request grants bounded full delivery plan and shows tar
 });
 
 
-test('compact preview uses readable Chinese scope, local expiry and one unchanged execute command', () => {
+test('compact preview uses readable Chinese scope, local expiry and one short Chinese execute command', () => {
   const id = '11111111-1111-4111-8111-111111111111';
   const p = plan({ summary: '修复 [按钮]，保留全部条件', operations: fullOperations, delivery: delivery(deployment()), expires: Date.UTC(2026, 9, 17, 16, 0, 0) });
   const text = executionPreview(p, id, true);
@@ -212,8 +212,9 @@ test('compact preview uses readable Chinese scope, local expiry and one unchange
   assert.match(text, /2026-10-18 00:00:00 北京时间/);
   assert.ok(!text.includes(p.delivery.deployment.verification));
   assert.ok(!text.includes(p.delivery.deployment.rollback));
-  assert.equal(text.split('/execute').length - 1, 1);
-  assert.equal(text.split('\n').at(-1), `/execute #12 v1 ${id}`);
+  assert.equal(text.split('执行 #').length - 1, 1);
+  assert.ok(!text.includes(id));
+  assert.equal(text.split('\n').at(-1), '执行 #12 v1');
   assert.ok(!text.includes(p.base_sha));
   assert.ok(!text.includes('edit-code'));
   assert.ok(!text.includes('\\u005b'));
@@ -296,5 +297,45 @@ test('compact full-delivery preview fits 500 characters with a 180-character sum
   assert.ok(text.length <= 500, `preview has ${text.length} characters`);
   assert.ok(text.includes(p.summary));
   assert.ok(!text.includes(p.delivery.work_branch));
-  assert.equal(text.split('11111111-1111-4111-8111-111111111111').length - 1, 1);
+  assert.ok(!text.includes('11111111-1111-4111-8111-111111111111'));
+});
+
+test('short Chinese, short slash and legacy approvals resolve one immutable plan and deduplicate each other', async t => {
+  for (const first of ['chinese', 'slash', 'legacy']) {
+    const f = fixture(t, { manualExecutionEnabled: true });
+    f.bridge.receiveSlack(event()); await f.bridge.drain();
+    const row = f.row();
+    const commands = { chinese: '执行 #12 v1', slash: '/execute #12 v1', legacy: `/execute #12 v1 ${row.id}` };
+    assert.equal(f.bridge.receiveWecom(frame(commands[first], 'first')), true); await f.bridge.drain();
+    for (const [kind, command] of Object.entries(commands)) assert.equal(f.bridge.receiveWecom(frame(command, `duplicate-${kind}`)), false);
+    assert.equal(f.store.get('SELECT count(*) n FROM execution_requests').n, 1);
+    assert.equal(f.store.get('SELECT plan FROM execution_requests').plan, row.id);
+    assert.equal(f.store.get('SELECT count(*) n FROM manual_execution_grants').n, 1);
+    assert.equal(f.posted.length, 1);
+    assert.deepEqual(f.posted[0].metadata.event_payload.plan, { ...plan(), id: row.id });
+    assert.equal(f.store.get('SELECT snapshot FROM execution_plans').snapshot, row.snapshot);
+  }
+});
+
+test('short approval grammar cannot infer a version or authorize quoted, extra, spoofed or unsafe numeric text', async t => {
+  const f = fixture(t, { manualExecutionEnabled: true });
+  f.bridge.receiveSlack(event()); await f.bridge.drain();
+  const invalid = ['执行', '执行 #12', '执行 #12 v01', '执行 #12 v1 v2', '执行 #12 #13 v1', '执行 #12 v1 同意', '执行 #12 v1\n', '执行 #12 v1\n执行 #12 v1', '执行  #12 v1', '执行 #9007199254740993 v1', '执行 #12 v9007199254740993', `执行 #12 v1 ${f.row().id}`, '/execute #12 v1\n'];
+  for (const [i, command] of invalid.entries()) assert.equal(f.bridge.receiveWecom(frame(command, `invalid-${i}`)), false, command);
+  for (const [i, command] of ['同意', '“执行 #12 v1”', '> 执行 #12 v1', 'owner: 执行 #12 v1', '请执行 #12 v1', '`执行 #12 v1`'].entries()) f.bridge.receiveWecom(frame(command, `ordinary-${i}`));
+  for (const extra of [{ from: { userid: 'other' } }, { aibotid: 'other' }, { chattype: 'group', chatid: 'group' }]) f.bridge.receiveWecom(frame('执行 #12 v1', `spoof-${JSON.stringify(extra)}`, extra));
+  await f.bridge.drain();
+  assert.equal(f.store.get('SELECT count(*) n FROM execution_requests').n, 0);
+  assert.equal(f.store.get('SELECT count(*) n FROM manual_execution_grants').n, 0);
+  assert.ok(f.posted.every(p => p.metadata?.event_type !== 'hiveflow_execution_requested'));
+});
+
+test('short lookup fails closed on ambiguous stored identities instead of selecting one', async t => {
+  const f = fixture(t, { manualExecutionEnabled: true });
+  f.bridge.receiveSlack(event()); await f.bridge.drain();
+  // Synthetic corrupted identity history: normal plan ingestion already forbids this.
+  f.store.run("INSERT INTO execution_plans SELECT '22222222-2222-4222-8222-222222222222','ambiguous-request',repo,'9002',issue_number,version,snapshot,owner,channel,root,created,expires FROM execution_plans");
+  assert.equal(f.bridge.receiveWecom(frame('执行 #12 v1', 'ambiguous')), false);
+  assert.equal(f.store.get('SELECT count(*) n FROM execution_requests').n, 0);
+  assert.equal(f.store.get('SELECT count(*) n FROM manual_execution_grants').n, 0);
 });

@@ -26,7 +26,7 @@ HiveFlow 产生唯一方案 UUID，保存完整原始字段快照与固定本人
 
 ## 本人请求与失败关闭
 
-协议预留精确命令 `/execute #<issue-number> v<version> <plan-uuid>`，单个 ASCII 空格分隔。它只在已认证的本人企业微信单聊入口解析；仅提供编号、自然语言“执行”或普通 `/review` 都不能替代版本和 UUID。群消息仍遵循原传输规则，不进入执行入口。
+预览提供精确命令 `执行 #<issue-number> v<version>`，单个 ASCII 空格分隔。它只在已认证的本人企业微信单聊入口解析，并按固定仓库、本人、频道、Issue 编号及明确版本唯一匹配现有不可变方案；不猜测最近或最新方案，匹配不唯一时拒绝。内部 UUID 和许可绑定不变，兼容 `/execute #<issue-number> v<version>` 及旧版 `/execute #<issue-number> v<version> <plan-uuid>`。仅提供编号、自然语言“执行”、普通“同意”或 `/review` 都不能替代明确版本；引用和附加文字不能授权。群消息仍遵循原传输规则，不进入执行入口。
 
 默认未就绪模式收到有效命令时，在同一 SQLite 事务中保存一次终态 `not_ready / executor_unavailable` 请求，并向本人和方案原始 Slack 根线程分别写入结果发件箱。结果明确 `execution_authorized: false`、`execution_started: false`。没有执行授权、待派发队列或后台工作；重启、接入执行器、额度恢复均不会重放它。同一方案重复命令或同一来源事件不会重复创建请求。后续真正接入执行能力，须发布新版本方案并重新取得明确执行请求。
 
@@ -38,7 +38,7 @@ Slack 结果第一行精确为 `Execution request result`，第二行为 JSON；
 
 `new IssueReviewApplication(config, { manualExecutionEnabled: true })` 或 `createIssueReviewApplication(env, options)` 是可信应用集成选项，不是给消息发送方的权限开关。当前 `src/main.js` 从严格解析的 `HIVEFLOW_MANUAL_EXECUTION_ENABLED` 读取这个选项，默认关闭；未修改任何生产环境配置。集成者必须先核验真实手动处理器、运行环境及额度读取能力，不能为了显示命令而设置为 true。
 
-开启后，预览会提供精确可复制的 `/execute` 命令。本人发送后，HiveFlow 在同一事务中保存独立的执行许可、`requested` 请求与 Slack 原方案线程的触发事件。事件只表示“已记录本人明确的请求，尚未启动”；不会调用任何网络执行器。许可绑定本人、唯一方案 UUID、仓库、Issue 身份、版本、基准 SHA、精确文件集合、操作、交付目标及到期时间；`/review` 不参与这条路径。
+开启后，预览会提供精确可复制的 `执行 #编号 v版本` 命令（不展示 UUID）。本人发送后，HiveFlow 在同一事务中保存独立的执行许可、`requested` 请求与 Slack 原方案线程的触发事件。事件只表示“已记录本人明确的请求，尚未启动”；不会调用任何网络执行器。许可绑定本人、唯一方案 UUID、仓库、Issue 身份、版本、基准 SHA、精确文件集合、操作、交付目标及到期时间；`/review` 不参与这条路径。
 
 触发消息第一行为 `Execution requested`，第二行为单个 JSON，metadata 类型 `hiveflow_execution_requested`。除前述共同字段外，包含 `grant_id` 和 `plan`（完整方案快照加 `id`）；`status: requested`、`reason: explicit_owner_request`、`execution_authorized: true`、`execution_started: false`。`grant_id` 等于业务 `request_id`。消费者须核验实际桥接 App 作者、固定私有频道、方案原根线程及权威 Store 中的许可状态，不能仅凭 JSON 创建任务。旧版本撤销、到期、配置改变或重启为默认未就绪时，尚未送出的触发事件不能再发出。
 

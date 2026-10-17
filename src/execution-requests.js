@@ -37,7 +37,7 @@ export function executionPreview(p, id, ready) {
     `有效至：${expiryText(p.expires)}`,
     `完整方案：/plan #${p.issue_number} v${p.version}`,
     ready ? '确认完整方案后授权；额度/环境检查通过才启动，失败或范围变化即停。' : '执行器尚未就绪：仅预览，不收集执行批准。',
-    ...(ready ? [`/execute #${p.issue_number} v${p.version} ${id}`] : []),
+    ...(ready ? [`执行 #${p.issue_number} v${p.version}`] : []),
   ].join('\n');
 }
 
@@ -136,12 +136,19 @@ export function receiveExecutionDetails(bridge, text, now, repository) {
 // Readiness is a trusted application capability, never data from a message.
 // Even the ready path only emits a request; no network execution happens here.
 export function receiveExecutionCommand(bridge, text, source, now, repository, dispatch = null) {
-  if (!/^\/execute(?:\s|$)/.test(text)) return null;
-  const match = new RegExp(`^/execute #([1-9][0-9]*) v([1-9][0-9]*) (${uuid})$`).exec(text);
-  if (!match) return false;
+  if (!/^(?:执行|\/execute)(?:\s|$)/.test(text)) return null;
+  const match = new RegExp(`^(?:执行 #([1-9][0-9]*) v([1-9][0-9]*)|/execute #([1-9][0-9]*) v([1-9][0-9]*)(?: (${uuid}))?)(?![\\s\\S])`).exec(text);
+  if (!match || !repository) return false;
+  const issueNumber = Number(match[1] ?? match[3]), version = Number(match[2] ?? match[4]);
+  if (!positive(issueNumber) || !positive(version)) return false;
   const { store, config: c } = bridge;
-  const p = store.get('SELECT * FROM execution_plans WHERE id=?', match[3]);
-  if (!p || !repository || p.repo !== repository || p.owner !== c.ownerUser || p.channel !== c.slackChannel || p.issue_number !== Number(match[1]) || p.version !== Number(match[2]) || now >= p.expires) return false;
+  // Resolve an exact pinned version only; ambiguity must never choose a plan.
+  const candidates = match[5]
+    ? store.all('SELECT * FROM execution_plans WHERE id=?', match[5])
+    : store.all('SELECT * FROM execution_plans WHERE repo=? AND issue_number=? AND version=? AND owner=? AND channel=? LIMIT 2', repository, issueNumber, version, c.ownerUser, c.slackChannel);
+  if (candidates.length !== 1) return false;
+  const [p] = candidates;
+  if (!p || !repository || p.repo !== repository || p.owner !== c.ownerUser || p.channel !== c.slackChannel || p.issue_number !== issueNumber || p.version !== version || now >= p.expires) return false;
   const latest = store.get('SELECT id FROM execution_plans WHERE repo=? AND issue_id=? ORDER BY version DESC LIMIT 1', p.repo, p.issue_id);
   if (latest.id !== p.id || store.get('SELECT id FROM execution_requests WHERE plan=? OR source=?', p.id, source)) return false;
   const id = randomUUID(), ready = dispatch !== null;
