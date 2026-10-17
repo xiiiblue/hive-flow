@@ -1,4 +1,7 @@
+import { initializeExecutionControl, receiveExecutionControl } from './execution-control.js';
+import { ManualDispatch } from './manual-dispatch.js';
 import { randomUUID } from 'node:crypto';
+import { initializeExecutionRequests, receiveExecutionPlan, receiveExecutionCommand, executionAuthorized } from './execution-requests.js';
 import { chunks } from 'wecom-slack-bridge/text';
 // Render free text as a single JSON string; encode Markdown/mention syntax literally.
 const literal = value => JSON.stringify(value).replace(/[<>&`*_\[\]()#]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
@@ -23,7 +26,9 @@ function receiveIssue(bridge, event, issueRepository) {
   const snapshot = JSON.stringify(p);
   const inserted = store.transaction(() => {
     // GitHub immutable ID and human-facing number must stay bound in both directions.
-    if (store.get('SELECT id FROM issue_proposals WHERE repo=? AND ((issue_id=? AND issue_number!=?) OR (issue_number=? AND issue_id!=?))', p.repo, p.issue_id, p.issue_number, p.issue_number, p.issue_id)) return false;
+    for (const table of ['issue_proposals', 'execution_plans']) {
+      if (store.get(`SELECT id FROM ${table} WHERE repo=? AND ((issue_id=? AND issue_number!=?) OR (issue_number=? AND issue_id!=?))`, p.repo, p.issue_id, p.issue_number, p.issue_number, p.issue_id)) return false;
+    }
     const latest = store.get('SELECT * FROM issue_proposals WHERE repo=? AND issue_id=? ORDER BY revision DESC LIMIT 1', p.repo, p.issue_id);
     // Includes identical redeliveries, conflicting same-version bodies, and stale versions.
     if (latest && p.revision <= latest.revision) return false;
@@ -71,24 +76,57 @@ export function loadIssueConfig(env = process.env) {
 }
 
 export class IssueReviewApplication {
-  constructor(config = loadIssueConfig()) { this.config = config; }
-  initialize({ store }) {
+  constructor(config = loadIssueConfig(), { manualExecutionEnabled = false } = {}) {
+    if (typeof manualExecutionEnabled !== 'boolean') throw new Error('Invalid manual execution enabled option');
+    this.config = config; this.manualExecutionEnabled = manualExecutionEnabled; this.dispatch = null;
+  }
+  initialize({ store, now = Date.now }) {
+    this.dispatch = this.manualExecutionEnabled ? new ManualDispatch(store, { now }) : null;
     // Additive, in-place schema ownership transfer. Existing audit rows remain untouched.
-    store.transaction(() => store.db.exec(`
+    store.transaction(() => {
+      initializeExecutionRequests(store);
+      initializeExecutionControl(store);
+      store.db.exec(`
       CREATE TABLE IF NOT EXISTS issue_proposals (id TEXT PRIMARY KEY, request TEXT UNIQUE NOT NULL, repo TEXT NOT NULL, issue_id TEXT NOT NULL, issue_number INTEGER NOT NULL, revision INTEGER NOT NULL, snapshot TEXT NOT NULL, owner TEXT NOT NULL, channel TEXT NOT NULL, root TEXT NOT NULL, created INTEGER NOT NULL, status TEXT NOT NULL, UNIQUE(repo,issue_id,revision));
       CREATE TABLE IF NOT EXISTS issue_decisions (proposal TEXT PRIMARY KEY, decision TEXT NOT NULL, reason TEXT NOT NULL, actor TEXT NOT NULL, source TEXT UNIQUE NOT NULL, created INTEGER NOT NULL);
-    `));
+    `);
+    });
   }
-  receiveRoot(bridge, event) { return receiveIssue(bridge, event, this.config.issueRepository); }
+  receiveRoot(bridge, event) {
+    if (event.text.startsWith('[wecom:execution-control]')) return receiveExecutionControl(bridge, event, this.config.issueRepository, this.manualExecutionEnabled ? this.dispatch : null);
+    if (event.text.startsWith('[wecom:execution-plan]')) return receiveExecutionPlan(bridge, event, this.config.issueRepository, this.manualExecutionEnabled ? this.dispatch : null);
+    return receiveIssue(bridge, event, this.config.issueRepository);
+  }
   receiveOwnerText(bridge, text, source, now) {
+    const execution = receiveExecutionCommand(bridge, text, source, now, this.config.issueRepository, this.manualExecutionEnabled ? this.dispatch : null);
+    if (execution !== null) return execution;
     const match = /^\/review ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) ([\s\S]+)$/.exec(text);
     if (!match) return null;
     return decideIssue(bridge, match[1], match[2], source, now, this.config.issueRepository);
   }
   authorizeRequest(bridge, request) {
+    if (request.kind === 'execution_plan') {
+      // A disabled runtime must not forward a formerly queued dispatch trigger.
+      const metadata = request.payload ? JSON.parse(request.payload).metadata : null;
+      if (metadata?.event_type === 'hiveflow_execution_requested') {
+        if (!this.manualExecutionEnabled) return false;
+        const grant = bridge.store.get('SELECT * FROM manual_execution_grants WHERE id=?', metadata.event_payload.grant_id);
+        if (!grant || grant.revoked || bridge.now() >= grant.expires) return false;
+      }
+      return executionAuthorized(bridge, request, this.config.issueRepository);
+    }
     return request.kind === 'issue' && issueAuthorized(bridge, request, this.config.issueRepository);
   }
 }
-export function createIssueReviewApplication(env = process.env) {
-  return new IssueReviewApplication(loadIssueConfig(env));
+export function createIssueReviewApplication(env = process.env, options = {}) {
+  return new IssueReviewApplication(loadIssueConfig(env), options);
+}
+
+// This explicit operator switch enables a protocol, not a proof that external
+// quota, worker or webhook integrations are configured. No inbound data sets it.
+export function loadManualExecutionEnabled(env = process.env) {
+  const value = env.HIVEFLOW_MANUAL_EXECUTION_ENABLED;
+  if (value === undefined || value === 'false') return false;
+  if (value === 'true') return true;
+  throw new Error('Invalid HIVEFLOW_MANUAL_EXECUTION_ENABLED');
 }

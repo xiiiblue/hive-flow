@@ -9,6 +9,7 @@ HiveFlow 的组合入口导入公开 `wecom-slack-bridge/runtime`，注入可信
 - HiveFlow 拥有 Issue 解析、不可变身份与修订、提案/决定 schema、业务配置和权限校验。
 - 通用桥接器拥有认证、路由、发件箱、传输去重和短期本人问答关联；它不依赖 HiveFlow，不读取 `ISSUE_REPOSITORY`，也不提供 Issue 工作流。
 - Issue 决定与发件箱继续使用同一 SQLite 文件、同一事务。此提取是逻辑所有权和代码边界调整，不是物理数据搬迁；已有记录、ID、历史及待处理回复必须保留。
+- 新增独立执行方案预览及版本绑定的手动请求入口；默认执行器未接入，请求返回 `not_ready`；新增显式部署开关仅启用手动协议和独立许可，不证明外部执行器就绪或自动启动工作，见 [手动执行边界](docs/MANUAL_EXECUTION.md)。
 - `src/workflow-control.js` 仍是独立休眠控制基础，默认 `executionReady: false`，不是扫描器或执行器。现有 `decision_record_only: true` 决定永远不自动升级为执行许可。
 
 ## 本地验证
