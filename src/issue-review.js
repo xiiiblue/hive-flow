@@ -1,7 +1,7 @@
 import { initializeExecutionControl, receiveExecutionControl } from './execution-control.js';
 import { ManualDispatch } from './manual-dispatch.js';
 import { randomUUID } from 'node:crypto';
-import { initializeExecutionRequests, receiveExecutionPlan, receiveExecutionCommand, executionAuthorized } from './execution-requests.js';
+import { initializeExecutionRequests, receiveExecutionPlan, receiveExecutionCommand, receiveExecutionDetails, executionAuthorized } from './execution-requests.js';
 import { chunks } from 'wecom-slack-bridge/text';
 // Render free text as a single JSON string; encode Markdown/mention syntax literally.
 const literal = value => JSON.stringify(value).replace(/[<>&`*_\[\]()#]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
@@ -98,6 +98,8 @@ export class IssueReviewApplication {
     return receiveIssue(bridge, event, this.config.issueRepository);
   }
   receiveOwnerText(bridge, text, source, now) {
+    const details = receiveExecutionDetails(bridge, text, now, this.config.issueRepository);
+    if (details !== null) return details;
     const execution = receiveExecutionCommand(bridge, text, source, now, this.config.issueRepository, this.manualExecutionEnabled ? this.dispatch : null);
     if (execution !== null) return execution;
     const match = /^\/review ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) ([\s\S]+)$/.exec(text);

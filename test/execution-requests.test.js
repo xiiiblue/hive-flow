@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Bridge } from 'wecom-slack-bridge/bridge';
 import { Store } from 'wecom-slack-bridge/store';
 import { IssueReviewApplication, loadManualExecutionEnabled } from '../src/issue-review.js';
-import { parseExecutionPlan } from '../src/execution-requests.js';
+import { parseExecutionPlan, executionPreview } from '../src/execution-requests.js';
 const repository = 'example/project';
 const config = { wecomBotId: 'test-bot', ownerUser: 'owner', allowedChats: new Set(['group']), slackChannel: 'C123', replyBot: 'BDOT', ttlMs: 3600000, maxBytes: 32000 };
 const plan = (extra = {}) => ({ repo: repository, issue_id: '9001', issue_number: 12, version: 1, base_sha: 'a'.repeat(40), files: ['README.md'], operations: ['edit-code', 'run-tests'], summary: 'Update installation instructions', expires: 200000, ...extra });
@@ -191,7 +191,7 @@ test('one explicit owner request grants bounded full delivery plan and shows tar
   const p = plan({ operations: fullOperations, delivery: delivery(deployment()) });
   assert.equal(f.bridge.receiveSlack(event(p)), true); await f.bridge.drain();
   const shown = f.sent.map(m => m.text).join('\n');
-  assert.match(shown, /目标分支/); assert.match(shown, /隔离工作分支/); assert.match(shown, /synthetic-staging/); assert.match(shown, /verification/); assert.match(shown, /rollback/);
+  assert.match(shown, /目标分支/); assert.ok(!shown.includes(p.delivery.work_branch)); assert.match(shown, /synthetic-staging/); assert.match(shown, /完整方案：\/plan #12 v1/);
   assert.ok(shown.includes(f.command()));
   assert.equal(f.bridge.receiveWecom(frame(f.command(), 'full-delivery')), true); await f.bridge.drain();
   const result = f.posted[0].metadata.event_payload;
@@ -200,4 +200,101 @@ test('one explicit owner request grants bounded full delivery plan and shows tar
   assert.equal(result.execution_started, false);
   assert.deepEqual(JSON.parse(f.store.get('SELECT binding FROM manual_execution_grants').binding).delivery, p.delivery);
   assert.equal(f.store.get('SELECT count(*) n FROM manual_dispatch_attempts').n, 0);
+});
+
+
+test('compact preview uses readable Chinese scope, local expiry and one unchanged execute command', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const p = plan({ summary: '修复 [按钮]，保留全部条件', operations: fullOperations, delivery: delivery(deployment()), expires: Date.UTC(2026, 9, 17, 16, 0, 0) });
+  const text = executionPreview(p, id, true);
+  assert.ok(text.startsWith('#12 v1 · 修复 ［按钮］，保留全部条件'));
+  assert.match(text, /修改代码、测试、提交、推送、创建 PR、合并、部署/);
+  assert.match(text, /2026-10-18 00:00:00 北京时间/);
+  assert.ok(!text.includes(p.delivery.deployment.verification));
+  assert.ok(!text.includes(p.delivery.deployment.rollback));
+  assert.equal(text.split('/execute').length - 1, 1);
+  assert.equal(text.split('\n').at(-1), `/execute #12 v1 ${id}`);
+  assert.ok(!text.includes(p.base_sha));
+  assert.ok(!text.includes('edit-code'));
+  assert.ok(!text.includes('\\u005b'));
+  assert.ok(!text.includes('方案编号'));
+  assert.ok(!executionPreview(p, id, false).includes('/execute'));
+});
+
+test('owner details read immutable exact scope without grants, requests or Slack messages', async t => {
+  const f = fixture(t, { manualExecutionEnabled: true });
+  const p = plan({ operations: fullOperations, delivery: delivery(deployment()), files: ['README.md', 'src/example_file.js'] });
+  f.bridge.receiveSlack(event(p)); await f.bridge.drain();
+  const row = f.row(), command = `/plan #12 v1 ${row.id}`;
+  assert.equal(f.bridge.receiveWecom(frame(command, 'not-owner', { from: { userid: 'other' } })), false);
+  for (const [i, bad] of [command.replace('#12', '#13'), command.replace('v1', 'v2'), command + ' yes', '/plan #12', command.replace('v1', 'v01')].entries()) assert.equal(f.bridge.receiveWecom(frame(bad, `bad-detail-${i}`)), false);
+  assert.equal(f.bridge.receiveWecom(frame(command, 'details')), true); await f.bridge.drain();
+  const shown = f.sent.at(-1).text;
+  for (const value of [p.base_sha, ...p.files, p.delivery.target_branch, p.delivery.work_branch, p.delivery.deployment.verification, p.delivery.deployment.rollback]) assert.ok(shown.includes(value));
+  assert.equal(f.store.get('SELECT count(*) n FROM execution_requests').n, 0);
+  assert.equal(f.store.get('SELECT count(*) n FROM manual_execution_grants').n, 0);
+  assert.equal(f.store.get('SELECT count(*) n FROM manual_dispatch_attempts').n, 0);
+  assert.equal(f.posted.length, 0);
+  assert.equal(f.store.get('SELECT snapshot FROM execution_plans WHERE id=?', row.id).snapshot, JSON.stringify(p));
+  assert.equal(f.bridge.receiveWecom(frame(command, 'details')), false);
+  f.advance(100000);
+  assert.equal(f.bridge.receiveWecom(frame(command, 'expired-detail')), true); await f.bridge.drain();
+  assert.match(f.sent.at(-1).text, /已过期/);
+  assert.equal(f.bridge.receiveWecom(frame(f.command(), 'expired-execute')), false);
+});
+
+test('detail reads retain repository, owner and channel pins across configuration changes', async t => {
+  for (const key of ['ownerUser', 'slackChannel', 'issueRepository']) {
+    const f = fixture(t); f.bridge.receiveSlack(event()); await f.bridge.drain();
+    const command = `/plan #12 v1 ${f.row().id}`;
+    if (key === 'issueRepository') f.application.config[key] = 'other/project'; else f.c[key] = 'other';
+    assert.equal(f.bridge.receiveWecom(frame(command, `changed-${key}`, { from: { userid: f.c.ownerUser } })), false);
+    assert.equal(f.bridge.receiveWecom(frame('/plan #12 v1', `short-changed-${key}`, { from: { userid: f.c.ownerUser } })), false);
+  }
+});
+
+
+test('long plans preserve every condition and keep approval commands unbroken', async t => {
+  const f = fixture(t, { manualExecutionEnabled: true });
+  const p = plan({ summary: '详'.repeat(660), operations: fullOperations, delivery: delivery({ ...deployment(), verification: '验'.repeat(330), rollback: '退'.repeat(330) }) });
+  assert.equal(f.bridge.receiveSlack(event(p)), true); await f.bridge.drain();
+  assert.ok(f.sent.length >= 1);
+  assert.ok(f.sent.every(m => Buffer.byteLength(m.text) <= 3400));
+  assert.equal(f.sent.filter(m => m.text.includes(f.command())).length, 1);
+  const all = f.sent.map(m => m.text).join('\n');
+  assert.ok(all.includes(p.summary));
+  assert.ok(!all.includes(p.delivery.deployment.verification));
+  assert.ok(!all.includes(p.delivery.deployment.rollback));
+  assert.equal(f.bridge.receiveWecom(frame('/plan #12 v1', 'long-details')), true); await f.bridge.drain();
+  const details = f.sent.map(m => m.text).join('\n');
+  assert.ok(details.includes(p.delivery.deployment.verification));
+  assert.ok(details.includes(p.delivery.deployment.rollback));
+});
+
+
+test('short detail command resolves only the pinned exact version and is read-only', async t => {
+  const f = fixture(t, { manualExecutionEnabled: true });
+  f.bridge.receiveSlack(event()); await f.bridge.drain();
+  const old = f.row();
+  f.bridge.receiveSlack(event(plan({ version: 2, summary: '新版' }), { ts: '101.1' })); await f.bridge.drain();
+  assert.equal(f.bridge.receiveWecom(frame('/plan #12 v1', 'short-old')), true); await f.bridge.drain();
+  assert.ok(f.sent.at(-1).text.includes(old.id));
+  assert.match(f.sent.at(-1).text, /已被新版本替代/);
+  assert.equal(f.bridge.receiveWecom(frame('/plan #12 v2', 'short-new')), true); await f.bridge.drain();
+  assert.match(f.sent.at(-1).text, /新版/);
+  assert.equal(f.bridge.receiveWecom(frame('/plan #12 v3', 'short-missing')), false);
+  assert.equal(f.bridge.receiveWecom(frame('/plan #13 v1', 'short-other')), false);
+  assert.equal(f.store.get('SELECT count(*) n FROM execution_requests').n, 0);
+  assert.equal(f.store.get('SELECT count(*) n FROM manual_execution_grants').n, 0);
+  assert.equal(f.posted.length, 0);
+});
+
+
+test('compact full-delivery preview fits 500 characters with a 180-character summary', () => {
+  const p = plan({ summary: '修'.repeat(180), operations: fullOperations, delivery: delivery(deployment()) });
+  const text = executionPreview(p, '11111111-1111-4111-8111-111111111111', true);
+  assert.ok(text.length <= 500, `preview has ${text.length} characters`);
+  assert.ok(text.includes(p.summary));
+  assert.ok(!text.includes(p.delivery.work_branch));
+  assert.equal(text.split('11111111-1111-4111-8111-111111111111').length - 1, 1);
 });

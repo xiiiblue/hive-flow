@@ -4,7 +4,43 @@ import { isExecutionPath, EXECUTION_OPERATIONS, isExecutionDelivery } from './ex
 
 const fields = ['repo', 'issue_id', 'issue_number', 'version', 'base_sha', 'files', 'operations', 'summary', 'expires'];
 const positive = n => Number.isSafeInteger(n) && n > 0;
-const literal = value => JSON.stringify(value).replace(/[<>&`*_\[\]()#]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+// Keep untrusted prose readable without activating Markdown links or mentions.
+const readable = value => value.replace(/[<>&`*_\[\]()#]/g, c => ({ '<': '＜', '>': '＞', '&': '＆', '`': '｀', '*': '＊', '_': '＿', '[': '［', ']': '］', '(': '（', ')': '）', '#': '＃' })[c]);
+const operationLabels = { 'edit-code': '修改代码', 'run-tests': '测试', commit: '提交', push: '推送', 'open-pr': '创建 PR', merge: '合并', deploy: '部署' };
+const expiryText = expires => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(expires) + ' 北京时间';
+function scopeLines(p, compact = false) {
+  const lines = [`操作：${p.operations.map(op => operationLabels[op]).join('、')}`];
+  if (p.delivery) lines.push(`目标分支：${p.delivery.target_branch}${compact ? '' : `（工作分支：${p.delivery.work_branch}）`}`);
+  if (p.delivery?.deployment) {
+    const d = p.delivery.deployment;
+    lines.push(`部署：${d.environment} / ${d.service}`);
+    if (!compact) lines.push(`验收：${readable(d.verification)}；回退：${readable(d.rollback)}`);
+  }
+  return lines;
+}
+// Prefer line boundaries so copyable commands and exact file paths stay intact.
+function messageParts(text) {
+  const parts = [];
+  for (const line of text.split('\n')) {
+    for (const piece of chunks(line || ' ', 3400)) {
+      if (parts.length && Buffer.byteLength(parts.at(-1) + '\n' + piece) <= 3400) parts[parts.length - 1] += '\n' + piece;
+      else parts.push(piece);
+    }
+  }
+  return parts;
+}
+export function executionPreview(p, id, ready) {
+  return [
+    `#${p.issue_number} v${p.version} · ${readable(p.summary)}`,
+    `${p.repo} · ${p.files.length} 个文件`,
+    ...scopeLines(p, true),
+    `有效至：${expiryText(p.expires)}`,
+    `完整方案：/plan #${p.issue_number} v${p.version}`,
+    ready ? '确认完整方案后授权；额度/环境检查通过才启动，失败或范围变化即停。' : '执行器尚未就绪：仅预览，不收集执行批准。',
+    ...(ready ? [`/execute #${p.issue_number} v${p.version} ${id}`] : []),
+  ].join('\n');
+}
+
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 // Exact file paths, never glob patterns. A future adapter must enforce these paths
 // against the pinned commit, including symlinks, before every operation.
@@ -63,15 +99,36 @@ export function receiveExecutionPlan(bridge, event, repository, dispatch = null)
     store.run("UPDATE jobs SET status='superseded' WHERE direction='wecom' AND status='pending' AND json_extract(payload,'$.execution_preview')=1 AND request IN (SELECT request FROM execution_plans WHERE repo=? AND issue_id=?)", p.repo, p.issue_id);
     store.run('INSERT INTO requests(id,source,target,created,expires,root,status,kind,owner,channel) VALUES (?,?,?,?,?,?,?,?,?,?)', request, `execution-plan:${id}`, c.ownerUser, now, now + c.ttlMs, event.ts, 'sent', 'execution_plan', c.ownerUser, c.slackChannel);
     store.run('INSERT INTO execution_plans VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', id, request, p.repo, p.issue_id, p.issue_number, p.version, JSON.stringify(p), c.ownerUser, c.slackChannel, event.ts, now, p.expires);
-    const readiness = manualExecutionEnabled ? '执行方案：仅在本人明确请求后，按列明的操作和目标进入手动派发。' : '执行方案预览：执行器尚未就绪，当前不能执行，也不收集执行批准。';
-    const deliveryText = p.delivery ? `\n目标分支：${literal(p.delivery.target_branch)}\n隔离工作分支：${literal(p.delivery.work_branch)}\n部署目标和验收回退：${literal(p.delivery.deployment)}` : '';
-    const preview = `${readiness}\n${p.repo} #${p.issue_number} · 方案 v${p.version}\n方案编号：${id}\n基准提交：${p.base_sha}\n范围（精确文件）：${literal(p.files)}\n操作：${literal(p.operations)}${deliveryText}\n方案：${literal(p.summary)}\n有效期：${new Date(p.expires).toISOString()}\n方案不代表已核验 GitHub 状态；预览本身不会启动代码修改、部署或自动开发。`;
-    const parts = chunks(preview, 3400);
-    if (manualExecutionEnabled) parts.push(`如要授权此方案，请在本私聊发送：\n/execute #${p.issue_number} v${p.version} ${id}\n仅授权所列提交、文件、操作、交付目标和有效期；额度与环境检查通过后才可启动。失败或目标变化须停止，不能扩大范围。`);
+    const parts = messageParts(executionPreview(p, id, manualExecutionEnabled));
     parts.forEach(text => store.addJob(request, 'wecom', { text, execution_preview: true }, 'owner', c.ownerUser, Math.min(p.expires, now + c.ttlMs)));
     return true;
   });
   if (inserted) bridge.drain(); return inserted;
+}
+
+// Read-only view of the immutable snapshot, under the same authenticated owner
+// ingress and pinned repository/channel checks as execution. Never creates a grant.
+export function receiveExecutionDetails(bridge, text, now, repository) {
+  if (!/^\/plan(?:\s|$)/.test(text)) return null;
+  const match = new RegExp(`^/plan #([1-9][0-9]*) v([1-9][0-9]*)(?: (${uuid}))?$`).exec(text);
+  if (!match || !repository) return false;
+  const { store, config: c } = bridge;
+  const row = match[3]
+    ? store.get('SELECT * FROM execution_plans WHERE id=?', match[3])
+    : store.get('SELECT * FROM execution_plans WHERE repo=? AND issue_number=? AND version=? AND owner=? AND channel=?', repository, Number(match[1]), Number(match[2]), c.ownerUser, c.slackChannel);
+  if (!row || !repository || row.repo !== repository || row.owner !== c.ownerUser || row.channel !== c.slackChannel || row.issue_number !== Number(match[1]) || row.version !== Number(match[2])) return false;
+  const p = JSON.parse(row.snapshot);
+  const latest = store.get('SELECT id FROM execution_plans WHERE repo=? AND issue_id=? ORDER BY version DESC LIMIT 1', row.repo, row.issue_id);
+  const status = now >= row.expires ? '已过期' : latest.id !== row.id ? '已被新版本替代' : '有效期内';
+  const detail = [
+    `完整方案 #${p.issue_number} v${p.version}（${status}；查询不会授权或执行）`,
+    `仓库：${p.repo}`, `方案编号：${row.id}`, `Issue ID：${p.issue_id}`,
+    `方案：${readable(p.summary)}`, `基准提交：${p.base_sha}`,
+    `精确文件（${p.files.length}）：`, ...p.files.map(path => `- ${path}`),
+    ...scopeLines(p), `有效至：${expiryText(p.expires)}`,
+  ].join('\n');
+  messageParts(detail).forEach(text => store.addJob(row.request, 'wecom', { text }, 'owner', c.ownerUser, now + c.ttlMs));
+  return row.request;
 }
 
 // Trusted bridge invokes only inside authenticated owner private ingress transaction.
