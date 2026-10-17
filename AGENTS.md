@@ -1,10 +1,12 @@
 # HiveFlow boundaries
 
-- HiveFlow owns issue lifecycle, execution approvals, manual/automatic modes, quota gates, durable claims, and future Codex orchestration.
-- The separate WeCom–Slack bridge owns generic message transport, authentication, routing, retry, and deduplication. Keep workflow policy out of the bridge; do not modify it from this project.
-- Current code is a dormant local persistence/gating primitive, not a web service, scanner, executor, or live integration. New state defaults to manual; execution readiness defaults to false. Do not enable automation, connect services, or deploy implicitly.
-- Authenticate actors in trusted adapters; actor strings alone are not authentication. Validate provider quota provenance, enforce approved repository/file scope, and check authorization before every execution step. Review records never imply execution permission.
-- Preserve fail-closed quota, revision, expiry, single-claim, restart/recovery, and checkpoint behavior. Add focused tests for any change.
-- Keep this project minimal: Node.js 24+, ES modules, built-in APIs, no runtime dependencies unless explicitly justified.
-- Never copy credentials, private identifiers, runtime databases/state, production configuration, dependencies, or third-party private source here. Do not select a license without the owner's decision.
-- Run `npm run check` before reporting a change complete.
+- HiveFlow owns Issue parsing, immutable identity/revisions, proposal and decision schema, business configuration and authorization. It also owns dormant execution controls and future orchestration.
+- The public WeCom–Slack bridge owns authentication, transport, routing, outbox, deduplication, and ephemeral owner-question correlation. It must not depend on HiveFlow or interpret business configuration.
+- Compose one process through the bridge exported runtime and trusted application hooks. Use one WeCom connection, the existing service identity/environment file, and the existing absolute state path. Never start a second bridge against the same Bot ID.
+- Retain the shared SQLite file so decisions and outbox writes remain atomic. Extraction changes logical ownership, not data location. Preserve all historical business records, stable IDs and cross-references; do not invent an export/import requirement or delete state.
+- Workflow-control remains dormant with execution readiness false. Do not enable automation, connect services, deploy, or reinterpret record-only decisions as execution grants.
+- Trusted adapters must authenticate actors, verify quota provenance, enforce repository/file scope, and check authorization before every execution step. Actor strings are not authentication.
+- Preserve fail-closed revision, quota, expiry, claim, restart and checkpoint behavior. Unknown custom kinds must remain preserved and non-deliverable without the matching application.
+- Use Node.js 24+, ES modules and built-in APIs where practical. The bridge runtime is a justified local dependency (`file:../wecom-slack-bridge`); fixed releases deploy both sibling directories together.
+- Never copy credentials, private runtime identifiers, production databases, environments or unapproved third-party private source into this repository. Do not select a license without the owner’s decision.
+- Run `npm run check` before reporting completion. Production actions and publishing require separate authorization.
