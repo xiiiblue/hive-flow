@@ -66,10 +66,25 @@ export class ManualDispatch {
     demand(a.controller_run_id === controllerRunId, 'controller_mismatch');
     return a;
   }
+  autoEntry(grantId) {
+    if (!this.store.get("SELECT name FROM sqlite_master WHERE type='table' AND name='auto_queue_entries'")) return null;
+    return this.store.get(`SELECT q.attempt_id,q.status AS queue_status,s.id AS session_id,s.status,s.deadline
+      FROM auto_queue_entries q LEFT JOIN auto_queue_sessions s ON s.id=q.session_id WHERE q.grant_id=?`, grantId) ?? null;
+  }
+  pauseAuto(a, reason) {
+    const auto = a && this.autoEntry(a.grant_id);
+    if (!auto || auto.attempt_id !== a.attempt_id) return;
+    this.store.run("UPDATE auto_queue_sessions SET status=? WHERE id=? AND status='active'", reason, auto.session_id);
+    this.store.run('UPDATE manual_dispatch_attempts SET stop_requested=1,updated=? WHERE attempt_id=? AND slot=1', this.now(), a.attempt_id);
+  }
   grant(a) {
     const g = this.store.get('SELECT * FROM manual_execution_grants WHERE id=?', a.grant_id);
     demand(g && !g.revoked && this.now() < g.expires, 'grant_revoked_or_expired');
     demand(!a.stop_requested, 'stop_requested');
+    // Dormant auto queue shares this slot. Enforce its session even if a future
+    // adapter accidentally enters through the manual control route.
+    const auto = this.autoEntry(a.grant_id);
+    demand(!auto || (auto.attempt_id === a.attempt_id && auto.queue_status === 'claimed' && auto.status === 'active' && this.now() < auto.deadline), 'auto_session_inactive');
     return g;
   }
   quota(q) {
@@ -83,6 +98,8 @@ export class ManualDispatch {
       const old = this.attempt(attemptId);
       if (old) { demand(old.controller_run_id === controllerRunId && old.grant_id === grantId, 'attempt_identity_mismatch'); return old; }
       demand(!this.status().active, 'pipeline_busy');
+      const auto = this.autoEntry(grantId);
+      demand(!auto || (auto.attempt_id === attemptId && auto.queue_status === 'claimed' && auto.status === 'active' && this.now() < auto.deadline), 'auto_session_inactive');
       const g = this.store.get('SELECT * FROM manual_execution_grants WHERE id=?', grantId);
       demand(g && !g.used && !g.revoked && this.now() < g.expires, 'invalid_execution_grant');
       demand(!this.store.get('SELECT attempt_id FROM manual_dispatch_attempts WHERE grant_id=?', grantId), 'grant_already_reserved');
@@ -119,6 +136,7 @@ export class ManualDispatch {
     return this.transaction(() => {
       const a = this.active(args); demand(['dispatch_started', 'running', 'unknown'].includes(a.status), 'invalid_attempt_state');
       this.store.run("UPDATE manual_dispatch_attempts SET status='unknown',updated=? WHERE attempt_id=?", this.now(), a.attempt_id);
+      this.pauseAuto(a, 'unknown_paused');
       return this.attempt(a.attempt_id);
     });
   }
@@ -133,10 +151,11 @@ export class ManualDispatch {
     const result = this.transaction(() => {
       try { return { value: fn() }; }
       catch (error) {
-        if (!['quota_unknown_or_stale', 'quota_too_low'].includes(error.message)) throw error;
+        if (!['quota_unknown_or_stale', 'quota_too_low', 'auto_session_inactive'].includes(error.message)) throw error;
         // A fresh quota snapshot is not resume authorization. Retain the slot
         // until the trusted controller verifies terminal/no-worker state.
         this.store.run('UPDATE manual_dispatch_attempts SET stop_requested=1,updated=? WHERE attempt_id=? AND slot=1', this.now(), args.attemptId);
+        this.pauseAuto(this.attempt(args.attemptId), error.message === 'auto_session_inactive' ? 'inactive_paused' : 'quota_paused');
         return { error };
       }
     });
@@ -157,6 +176,7 @@ export class ManualDispatch {
     return this.transaction(() => {
       demand(this.attempt(attemptId)?.slot === 1, 'attempt_not_active');
       this.store.run('UPDATE manual_dispatch_attempts SET stop_requested=1,updated=? WHERE attempt_id=?', this.now(), attemptId);
+      this.pauseAuto(this.attempt(attemptId), 'stop_paused');
       return this.attempt(attemptId);
     });
   }
@@ -165,6 +185,7 @@ export class ManualDispatch {
       demand(this.store.get('SELECT id FROM manual_execution_grants WHERE id=?', grantId), 'invalid_grant');
       this.store.run('UPDATE manual_execution_grants SET revoked=1 WHERE id=?', grantId);
       this.store.run('UPDATE manual_dispatch_attempts SET stop_requested=1,updated=? WHERE grant_id=? AND slot=1', this.now(), grantId);
+      this.pauseAuto(this.store.get('SELECT * FROM manual_dispatch_attempts WHERE grant_id=? AND slot=1', grantId), 'revoked_paused');
     });
   }
   /** Caller must explicitly verify terminal worker state (or verify no task was
@@ -174,6 +195,7 @@ export class ManualDispatch {
     return this.transaction(() => {
       const a = this.attempt(attemptId); demand(a && a.slot === 1, 'attempt_not_active');
       demand(outcome !== 'completed' || a.status === 'running', 'completion_not_confirmed');
+      if (outcome === 'stopped') this.pauseAuto(a, 'stopped_paused');
       this.store.run('UPDATE manual_dispatch_attempts SET slot=NULL,status=?,updated=? WHERE attempt_id=?', outcome, this.now(), attemptId);
       return this.attempt(attemptId);
     });

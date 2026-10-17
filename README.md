@@ -11,6 +11,7 @@ HiveFlow 的组合入口导入公开 `wecom-slack-bridge/runtime`，注入可信
 - Issue 决定与发件箱继续使用同一 SQLite 文件、同一事务。此提取是逻辑所有权和代码边界调整，不是物理数据搬迁；已有记录、ID、历史及待处理回复必须保留。
 - 新增独立执行方案预览及版本绑定的手动请求入口；默认执行器未接入，请求返回 `not_ready`；新增显式部署开关仅启用手动协议和独立许可，不证明外部执行器就绪或自动启动工作，见 [手动执行边界](docs/MANUAL_EXECUTION.md)。
 - `src/workflow-control.js` 仍是独立休眠控制基础，默认 `executionReady: false`，不是扫描器或执行器。现有 `decision_record_only: true` 决定永远不自动升级为执行许可。
+- 新的休眠自动队列 `src/auto-queue.js` 与手动派发共用一个 Store 和执行槽，覆盖明确入队、期限、停止及异常暂停；尚未接入本人命令、定时器或真实任务。不要把旧独立控制库接成第二个调度器。详见 [自动队列边界](docs/AUTO_MODE.md)。
 
 ## 本地验证
 
