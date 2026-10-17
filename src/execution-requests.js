@@ -1,9 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { chunks } from 'wecom-slack-bridge/text';
-import { isExecutionPath } from './execution-scope.js';
-import { WORKFLOW_OPERATIONS } from './workflow-control.js';
+import { isExecutionPath, EXECUTION_OPERATIONS, isExecutionDelivery } from './execution-scope.js';
 
-const manualOperations = WORKFLOW_OPERATIONS.filter(op => ['edit-code', 'run-tests'].includes(op));
 const fields = ['repo', 'issue_id', 'issue_number', 'version', 'base_sha', 'files', 'operations', 'summary', 'expires'];
 const positive = n => Number.isSafeInteger(n) && n > 0;
 const literal = value => JSON.stringify(value).replace(/[<>&`*_\[\]()#]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
@@ -14,13 +12,14 @@ const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 export function parseExecutionPlan(text, repository, now) {
   if (!repository || typeof text !== 'string' || Buffer.byteLength(text) > 16384 || !text.startsWith('[wecom:execution-plan]')) return null;
   let p; try { p = JSON.parse(text.slice('[wecom:execution-plan]'.length)); } catch { return null; }
-  if (!p || Array.isArray(p) || Object.keys(p).length !== fields.length || fields.some(k => !Object.hasOwn(p, k))) return null;
+  if (!p || Array.isArray(p) || Object.keys(p).length !== fields.length + (Object.hasOwn(p, 'delivery') ? 1 : 0) || fields.some(k => !Object.hasOwn(p, k))) return null;
   if (p.repo !== repository || typeof p.issue_id !== 'string' || !/^[1-9][0-9]{0,19}$/.test(p.issue_id) || !positive(p.issue_number) || !positive(p.version) || typeof p.base_sha !== 'string' || !/^[0-9a-f]{40}$/.test(p.base_sha)) return null;
   if (!Array.isArray(p.files) || !p.files.length || p.files.length > 30 || new Set(p.files).size !== p.files.length || !p.files.every(isExecutionPath)) return null;
-  if (!Array.isArray(p.operations) || !p.operations.length || new Set(p.operations).size !== p.operations.length || !p.operations.every(op => manualOperations.includes(op))) return null;
+  if (!Array.isArray(p.operations) || !p.operations.length || new Set(p.operations).size !== p.operations.length || !p.operations.every(op => EXECUTION_OPERATIONS.includes(op))) return null;
+  if (!isExecutionDelivery(p.delivery, p.operations)) return null;
   if (typeof p.summary !== 'string' || !p.summary.trim() || Buffer.byteLength(p.summary) > 2000 || /[\x00-\x1f\x7f]/.test(p.summary)) return null;
   if (!positive(p.expires) || p.expires <= now || p.expires - now > 7 * 86400000) return null;
-  return Object.fromEntries(fields.map(k => [k, p[k]]));
+  return Object.fromEntries([...fields, ...(Object.hasOwn(p, 'delivery') ? ['delivery'] : [])].map(k => [k, p[k]]));
 }
 
 export function initializeExecutionRequests(store) {
@@ -64,10 +63,11 @@ export function receiveExecutionPlan(bridge, event, repository, dispatch = null)
     store.run("UPDATE jobs SET status='superseded' WHERE direction='wecom' AND status='pending' AND json_extract(payload,'$.execution_preview')=1 AND request IN (SELECT request FROM execution_plans WHERE repo=? AND issue_id=?)", p.repo, p.issue_id);
     store.run('INSERT INTO requests(id,source,target,created,expires,root,status,kind,owner,channel) VALUES (?,?,?,?,?,?,?,?,?,?)', request, `execution-plan:${id}`, c.ownerUser, now, now + c.ttlMs, event.ts, 'sent', 'execution_plan', c.ownerUser, c.slackChannel);
     store.run('INSERT INTO execution_plans VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', id, request, p.repo, p.issue_id, p.issue_number, p.version, JSON.stringify(p), c.ownerUser, c.slackChannel, event.ts, now, p.expires);
-    const readiness = manualExecutionEnabled ? '执行方案：仅在本人明确请求后进入手动派发；不含推送或部署。' : '执行方案预览：执行器尚未就绪，当前不能执行，也不收集执行批准。';
-    const preview = `${readiness}\n${p.repo} #${p.issue_number} · 方案 v${p.version}\n方案编号：${id}\n基准提交：${p.base_sha}\n范围（精确文件）：${literal(p.files)}\n操作：${literal(p.operations)}\n方案：${literal(p.summary)}\n有效期：${new Date(p.expires).toISOString()}\n方案不代表已核验 GitHub 状态；预览本身不会启动代码修改、部署或自动开发。`;
+    const readiness = manualExecutionEnabled ? '执行方案：仅在本人明确请求后，按列明的操作和目标进入手动派发。' : '执行方案预览：执行器尚未就绪，当前不能执行，也不收集执行批准。';
+    const deliveryText = p.delivery ? `\n目标分支：${literal(p.delivery.target_branch)}\n隔离工作分支：${literal(p.delivery.work_branch)}\n部署目标和验收回退：${literal(p.delivery.deployment)}` : '';
+    const preview = `${readiness}\n${p.repo} #${p.issue_number} · 方案 v${p.version}\n方案编号：${id}\n基准提交：${p.base_sha}\n范围（精确文件）：${literal(p.files)}\n操作：${literal(p.operations)}${deliveryText}\n方案：${literal(p.summary)}\n有效期：${new Date(p.expires).toISOString()}\n方案不代表已核验 GitHub 状态；预览本身不会启动代码修改、部署或自动开发。`;
     const parts = chunks(preview, 3400);
-    if (manualExecutionEnabled) parts.push(`如要授权此方案，请在本私聊发送：\n/execute #${p.issue_number} v${p.version} ${id}\n仅授权所列提交、文件、操作和有效期；额度与执行环境检查通过后才可启动。`);
+    if (manualExecutionEnabled) parts.push(`如要授权此方案，请在本私聊发送：\n/execute #${p.issue_number} v${p.version} ${id}\n仅授权所列提交、文件、操作、交付目标和有效期；额度与环境检查通过后才可启动。失败或目标变化须停止，不能扩大范围。`);
     parts.forEach(text => store.addJob(request, 'wecom', { text, execution_preview: true }, 'owner', c.ownerUser, Math.min(p.expires, now + c.ttlMs)));
     return true;
   });
@@ -95,7 +95,7 @@ export function receiveExecutionCommand(bridge, text, source, now, repository, d
   const result = { request_id: id, plan_id: p.id, repo: p.repo, issue_id: p.issue_id, issue_number: p.issue_number, version: p.version, status, reason, execution_authorized: ready, execution_started: false,
     ...(ready ? { grant_id: id, plan } : {}) };
   const explanation = ready
-    ? `问题 #${p.issue_number} · 方案 v${p.version}：已记录本人明确的执行请求，尚未启动。须通过额度、环境与范围检查后才能派发；不含推送或部署。`
+    ? `问题 #${p.issue_number} · 方案 v${p.version}：已记录本人明确的执行请求，尚未启动。须通过额度、环境与范围检查后才能派发；仅执行方案列明的操作及交付目标。`
     : `问题 #${p.issue_number} · 方案 v${p.version}：执行器尚未就绪，未授权、未启动执行。此请求不会排队或在重启后执行。执行能力接入后须重新发布新版本方案并明确请求。`;
   const eventType = ready ? 'hiveflow_execution_requested' : 'hiveflow_execution_request_result';
   const record = JSON.stringify(result).replace(/[<>&]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));

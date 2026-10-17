@@ -33,7 +33,7 @@ test('explicit grant and immutable full binding; record-only decisions cannot au
 test('rejects unsafe file scopes and operations including PR creation', t => {
   const f = fixture(t);
   for (const files of [[], ['../file'], ['/etc/passwd'], ['.git/config'], ['src/*'], ['.env'], ['config/.env.production'], ['.ssh/id_rsa'], ['.aws/credentials'], ['src/a.js', 'src/a.js']]) assert.throws(() => f.grant({ plan: plan({ files }) }), /invalid_scope/);
-  for (const operations of [[], ['open-draft-pr'], ['push'], ['run-tests', 'run-tests']]) assert.throws(() => f.grant({ plan: plan({ operations }) }), /invalid_operations/);
+  for (const operations of [[], ['open-draft-pr'], ['delete-repo'], ['run-tests', 'run-tests']]) assert.throws(() => f.grant({ plan: plan({ operations }) }), /invalid_operations/);
 });
 test('ingress grant and outbox share one atomic transaction', t => {
   const f = fixture(t);
@@ -144,4 +144,27 @@ test('transaction-only composition seams reject calls outside a transaction', t 
   assert.throws(() => f.c.registerGrantInTransaction({ grantId: 'g', plan: plan(), actor: 'owner', kind: 'execution', decisionRecordOnly: false }), /transaction_required/);
   assert.throws(() => f.c.executeInTransaction('reserve', { ...f.ids, grantId: 'g' }), /transaction_required/);
   assert.equal(f.store.get('SELECT COUNT(*) AS n FROM manual_execution_grants').n, 0);
+});
+const delivery = (extra = {}) => ({ target_branch: 'main', work_branch: 'hiveflow/issue-12', deployment: { environment: 'pve', service: 'hiveflow', verification: 'Check service health and smoke tests', rollback: 'Restore verified backup and restart previous service' }, ...extra });
+test('delivery grant immutably binds branches, deployment, verification and rollback', t => {
+  const f = fixture(t), operations = ['edit-code', 'run-tests', 'commit', 'push', 'open-pr', 'merge', 'deploy'];
+  assert.throws(() => f.grant({ plan: plan({ operations }) }), /invalid_delivery/);
+  f.grant({ plan: plan({ operations, delivery: delivery() }) });
+  for (const d of [delivery({ target_branch: 'release' }), delivery({ work_branch: 'other' }), ...['environment', 'service', 'verification', 'rollback'].map(k => delivery({ deployment: { ...delivery().deployment, [k]: 'changed' } }))]) assert.throws(() => f.grant({ plan: plan({ operations, delivery: d }) }), /immutable_grant_mismatch/);
+  f.reserve(); const started = f.start(); assert.deepEqual(started.plan.delivery, delivery());
+  f.c.recordStarted({ ...f.ids, threadId: 'thread-1', turnId: 'turn-1' });
+  for (const operation of ['commit', 'push', 'open-pr', 'merge', 'deploy']) {
+    assert.throws(() => f.checkpoint({ operation }), /delivery_scope_mismatch/);
+    assert.throws(() => f.checkpoint({ operation, delivery: delivery({ target_branch: 'release' }) }), /delivery_scope_mismatch/);
+    assert.throws(() => f.checkpoint({ operation, delivery: delivery({ deployment: { ...delivery().deployment, environment: 'other' } }) }), /delivery_scope_mismatch/);
+    assert.deepEqual(f.checkpoint({ operation, delivery: delivery() }).delivery, delivery());
+  }
+  assert.throws(() => f.checkpoint({ delivery: delivery() }), /delivery_scope_mismatch/);
+});
+test('delivery canonicalization tolerates key order, never broadens edit/test grants', t => {
+  const f = fixture(t), d = { deployment: null, work_branch: 'hiveflow/issue-12', target_branch: 'main' };
+  f.grant({ plan: plan({ operations: ['push'], delivery: d }) }); f.reserve(); f.start(); f.c.recordStarted({ ...f.ids, threadId: 'thread', turnId: 'turn' });
+  assert.equal(f.checkpoint({ operation: 'push', delivery: { target_branch: 'main', work_branch: 'hiveflow/issue-12', deployment: null } }).operation, 'push');
+  assert.throws(() => f.checkpoint({ operation: 'deploy', delivery: delivery() }), /operation_not_granted/);
+  assert.throws(() => f.checkpoint({ operation: 'push', delivery: { ...d, extra: true } }), /delivery_scope_mismatch/);
 });

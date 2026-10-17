@@ -9,7 +9,7 @@ import { IssueReviewApplication } from '../src/issue-review.js';
 import { parseExecutionControl, initializeExecutionControl } from '../src/execution-control.js';
 const repository = 'example/project';
 const plan = { repo: repository, issue_id: '9001', issue_number: 12, version: 1, base_sha: 'a'.repeat(40), files: ['README.md'], operations: ['edit-code', 'run-tests'], summary: 'Update documentation', expires: 200000 };
-async function fixture(t, ready = true) {
+async function fixture(t, ready = true, planExtra = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'control-test-')), store = new Store(dir); let time = 100000, seq = 0;
   const application = new IssueReviewApplication({ issueRepository: repository }, { manualExecutionEnabled: ready });
   const config = { wecomBotId: 'test-bot', ownerUser: 'owner', allowedChats: new Set(), slackChannel: 'C123', replyBot: 'BDOT', ttlMs: 3600000, maxBytes: 32000 };
@@ -17,7 +17,7 @@ async function fixture(t, ready = true) {
   const posted = [], bridge = new Bridge({ store, application, config, now: () => time, wait: async () => {}, slack: { post: async p => { posted.push(p); return { ok: true, ts: '999.1' }; } }, wecom: { ack: async () => {}, send: async () => ({ errcode: 0 }) } });
   bridge.wecomReady = true;
   t.after(async () => { await bridge.stop(); store.close(); rmSync(dir, { recursive: true, force: true }); });
-  bridge.receiveSlack({ type: 'message', channel: 'C123', ts: '100.1', bot_id: 'BDOT', text: '[wecom:execution-plan]' + JSON.stringify(plan) }); await bridge.drain();
+  bridge.receiveSlack({ type: 'message', channel: 'C123', ts: '100.1', bot_id: 'BDOT', text: '[wecom:execution-plan]' + JSON.stringify({ ...plan, ...planExtra }) }); await bridge.drain();
   const row = store.get('SELECT * FROM execution_plans');
   bridge.receiveWecom({ body: { aibotid: 'test-bot', msgid: 'approval', msgtype: 'text', chattype: 'single', from: { userid: 'owner' }, text: { content: `/execute #12 v1 ${row.id}` } } }); await bridge.drain();
   const grant = store.get('SELECT * FROM execution_requests'); posted.length = 0;
@@ -86,4 +86,19 @@ test('unknown quota acknowledgement commits checkpoint stop and fresh quota cann
   assert.equal(f.result().error, 'quota_unknown_or_stale'); assert.equal(f.application.dispatch.status().active.stop_requested, 1);
   f.send(f.command('checkpoint', { operation: 'run-tests', files: ['README.md'], quota: f.quota() })); await f.bridge.drain();
   assert.equal(f.result().error, 'stop_requested');
+});
+
+test('delivery checkpoints bind full approved targets and cannot substitute branch or environment', async t => {
+  const delivery = { target_branch: 'main', work_branch: 'hiveflow/issue-12', deployment: { environment: 'pve', service: 'hiveflow', verification: 'Health check', rollback: 'Restore verified backup' } };
+  const f = await fixture(t, true, { operations: ['edit-code', 'run-tests', 'commit', 'push', 'open-pr', 'merge', 'deploy'], delivery });
+  f.send(f.command('reserve')); await f.bridge.drain(); f.send(f.command('start', { quota: f.quota() })); await f.bridge.drain();
+  f.send(f.command('started', { thread_id: 'thread-1', turn_id: 'turn-1' })); await f.bridge.drain();
+  for (const operation of ['commit', 'push', 'open-pr', 'merge', 'deploy']) {
+    assert.equal(f.send(f.command('checkpoint', { operation, files: ['README.md'], quota: f.quota() })), false);
+    assert.equal(f.send(f.command('checkpoint', { operation, files: ['README.md'], quota: f.quota(), delivery: { ...delivery, target_branch: 'other' } })), true); await f.bridge.drain();
+    assert.equal(f.result().error, 'delivery_scope_mismatch');
+    assert.equal(f.send(f.command('checkpoint', { operation, files: ['README.md'], quota: f.quota(), delivery })), true); await f.bridge.drain(); assert.equal(f.result().ok, true);
+  }
+  f.send(f.command('checkpoint', { operation: 'deploy', files: ['README.md'], quota: f.quota(), delivery: { ...delivery, deployment: { ...delivery.deployment, environment: 'other' } } })); await f.bridge.drain();
+  assert.equal(f.result().error, 'delivery_scope_mismatch');
 });

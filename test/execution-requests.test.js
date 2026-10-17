@@ -173,3 +173,31 @@ test('manual protocol startup switch is strict, disabled by default, and indepen
   assert.equal(parseExecutionPlan(event(plan({ manualExecutionEnabled: true })).text, repository, 100000), null);
   assert.ok(parseExecutionPlan(event(plan({ files: ['.env.example', 'config/settings.json'] })).text, repository, 100000));
 });
+
+const delivery = (deployment = null) => ({ target_branch: 'main', work_branch: 'hiveflow/issue-12-v2', deployment });
+const deployment = () => ({ environment: 'synthetic-staging', service: 'example-service', verification: 'Check the service health endpoint and smoke test the documented flow', rollback: 'Restore the previously verified release and recheck health' });
+const fullOperations = ['edit-code', 'run-tests', 'commit', 'push', 'open-pr', 'merge', 'deploy'];
+test('delivery operations require exact approved branch and deployment targets', () => {
+  const parse = p => parseExecutionPlan(event(p).text, repository, 100000);
+  const p = plan({ operations: fullOperations, delivery: delivery(deployment()) });
+  assert.deepEqual(parse(p), p);
+  assert.ok(parse(plan({ operations: ['commit', 'push', 'open-pr', 'merge'], delivery: delivery() })));
+  for (const d of [undefined, {}, { ...delivery(deployment()), repo: 'other/project' }, { ...delivery(deployment()), target_branch: 'main; echo hi' }, { ...delivery(deployment()), work_branch: 'main' }, { ...delivery(deployment()), work_branch: '../other' }, { ...delivery(deployment()), work_branch: 'topic.lock' }, delivery(), delivery({ ...deployment(), environment: '' }), delivery({ ...deployment(), service: 'service && reboot' }), delivery({ ...deployment(), verification: '' }), delivery({ ...deployment(), rollback: '' }), delivery({ ...deployment(), command: 'deploy' })]) assert.equal(parse(plan({ operations: fullOperations, ...(d === undefined ? {} : { delivery: d }) })), null);
+  assert.equal(parse(plan({ delivery: delivery() })), null);
+  assert.equal(parse(plan({ operations: ['push'], delivery: delivery(deployment()) })), null);
+});
+test('one explicit owner request grants bounded full delivery plan and shows targets before approval', async t => {
+  const f = fixture(t, { manualExecutionEnabled: true });
+  const p = plan({ operations: fullOperations, delivery: delivery(deployment()) });
+  assert.equal(f.bridge.receiveSlack(event(p)), true); await f.bridge.drain();
+  const shown = f.sent.map(m => m.text).join('\n');
+  assert.match(shown, /目标分支/); assert.match(shown, /隔离工作分支/); assert.match(shown, /synthetic-staging/); assert.match(shown, /verification/); assert.match(shown, /rollback/);
+  assert.ok(shown.includes(f.command()));
+  assert.equal(f.bridge.receiveWecom(frame(f.command(), 'full-delivery')), true); await f.bridge.drain();
+  const result = f.posted[0].metadata.event_payload;
+  assert.deepEqual(result.plan.delivery, p.delivery);
+  assert.deepEqual(result.plan.operations, p.operations);
+  assert.equal(result.execution_started, false);
+  assert.deepEqual(JSON.parse(f.store.get('SELECT binding FROM manual_execution_grants').binding).delivery, p.delivery);
+  assert.equal(f.store.get('SELECT count(*) n FROM manual_dispatch_attempts').n, 0);
+});

@@ -8,13 +8,18 @@
 const demand = (ok, code) => { if (!ok) throw new Error(code); };
 const text = s => typeof s === 'string' && !!s.trim();
 const positive = n => Number.isSafeInteger(n) && n > 0;
-import { isExecutionPath as validPath } from './execution-scope.js';
-export const MANUAL_OPERATIONS = Object.freeze(['edit-code', 'run-tests']);
+import { isExecutionPath as validPath, EXECUTION_OPERATIONS, DELIVERY_OPERATIONS, isExecutionDelivery } from './execution-scope.js';
+export const MANUAL_OPERATIONS = EXECUTION_OPERATIONS;
+export function canonicalDelivery(d) {
+  if (d === undefined) return undefined;
+  return { target_branch: d.target_branch, work_branch: d.work_branch, deployment: d.deployment === null ? null : { environment: d.deployment.environment, service: d.deployment.service, verification: d.deployment.verification, rollback: d.deployment.rollback } };
+}
 function binding(p) {
   demand(p && text(p.id) && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(p.repo) && typeof p.issue_id === 'string' && /^[1-9][0-9]{0,19}$/.test(p.issue_id) && positive(p.issue_number) && positive(p.version) && /^[0-9a-f]{40}$/.test(p.base_sha) && positive(p.expires), 'invalid_plan');
   demand(Array.isArray(p.files) && p.files.length > 0 && p.files.length <= 30 && new Set(p.files).size === p.files.length && [...p.files].every(validPath), 'invalid_scope');
   demand(Array.isArray(p.operations) && p.operations.length > 0 && new Set(p.operations).size === p.operations.length && [...p.operations].every(op => MANUAL_OPERATIONS.includes(op)), 'invalid_operations');
-  return JSON.stringify({ id: p.id, repo: p.repo, issue_id: p.issue_id, issue_number: p.issue_number, version: p.version, base_sha: p.base_sha, files: [...p.files].sort(), operations: [...p.operations].sort(), expires: p.expires });
+  demand(isExecutionDelivery(p.delivery, p.operations), 'invalid_delivery');
+  return JSON.stringify({ id: p.id, repo: p.repo, issue_id: p.issue_id, issue_number: p.issue_number, version: p.version, base_sha: p.base_sha, files: [...p.files].sort(), operations: [...p.operations].sort(), ...(p.delivery === undefined ? {} : { delivery: canonicalDelivery(p.delivery) }), expires: p.expires });
 }
 export class ManualDispatch {
   constructor(store, { now = Date.now } = {}) {
@@ -137,8 +142,11 @@ export class ManualDispatch {
       const a = this.active(args); demand(a.status === 'running', 'worker_not_confirmed');
       const g = this.grant(a), p = JSON.parse(g.binding); this.quota(args.quota);
       demand(p.operations.includes(args.operation), 'operation_not_granted');
+      if (DELIVERY_OPERATIONS.includes(args.operation)) {
+        demand(isExecutionDelivery(args.delivery, p.operations) && args.delivery !== undefined && JSON.stringify(canonicalDelivery(args.delivery)) === JSON.stringify(p.delivery), 'delivery_scope_mismatch');
+      } else demand(args.delivery === undefined, 'delivery_scope_mismatch');
       demand(Array.isArray(args.files) && args.files.length > 0 && [...args.files].every(f => p.files.includes(f)), 'file_not_granted');
-      return { attemptId: a.attempt_id, threadId: a.thread_id, turnId: a.turn_id, plan: p, operation: args.operation, files: [...args.files] };
+      return { attemptId: a.attempt_id, threadId: a.thread_id, turnId: a.turn_id, plan: p, operation: args.operation, files: [...args.files], ...(args.delivery === undefined ? {} : { delivery: canonicalDelivery(args.delivery) }) };
   }
   requestStop({ attemptId }) {
     return this.transaction(() => {
