@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "repo": "xiiiblue/hive-flow",
+  "common": {
+    "docs/SPEC_ENTRY.md": ["*"],
+    "docs/SPEC_LOADING.md": ["*"],
+    "docs/spec-manifest.json": ["*"]
+  },
+  "scenarios": {
+    "intake": {
+      "docs/GROUP_INTAKE.md": ["*"],
+      "docs/ITEM_LIFECYCLE.md": ["哪个入口可以写"],
+      "docs/ADAPTERS.md": ["规则与技术保障"]
+    },
+    "review": {
+      "docs/ITEM_LIFECYCLE.md": ["*"],
+      "docs/WORKFLOW.md": ["角色与边界", "从反馈到方案", "意图、关联、权限分别核验"]
+    },
+    "delivery": {
+      "AGENTS.md": ["*"],
+      "docs/WORKFLOW.md": ["*"],
+      "docs/ITEM_LIFECYCLE.md": ["可照做的收尾顺序"],
+      "docs/ADAPTERS.md": ["开发任务的阶段衔接", "环境查询与部署边界"]
+    }
+  }
+}
