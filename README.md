@@ -1,13 +1,28 @@
 # HiveFlow
 
-HiveFlow 是一套供智能体遵循的研发协作规范：先调查反馈，再由负责人决定是否采纳；实施时一次说清范围，完成后按证据交付。它不提供模型、机器人、业务服务或任务调度器。
+HiveFlow 是源自蜂巢实践的研发协作规范，探索从 Director 逐步协调，走向授权边界内的流程自动承接。先调查反馈，由负责人决定是否采纳；实施时一次说清范围，完成后按证据交付。当前自动开发尚未启用。
+
+它复用现成的理解、工单和沟通能力，不从零构建模型、工单系统或即时通信平台，也不提供新的业务服务或任务调度器。
 
 HiveFlow is an agent collaboration specification, not a deployable service. The documentation is currently maintained in Chinese.
+
+## 复用现成能力
+
+|能力|在 HiveFlow 中的职责|
+|---|---|
+|Dots 及其可用模型|理解问题、调查事实、整理方案与协调工作；复用账号可用的先进模型能力，具体模型以账号和平台支持为准|
+|GitHub Issues|管理 Bug、需求和交付线索；登记、采纳与实施分别核验，不把工单状态当作执行许可|
+|企业微信与独立桥接|作为日常工作沟通入口，经 [wecom-slack-bridge](https://github.com/xiiiblue/wecom-slack-bridge)连接到已授权响应方；桥接只传输消息，不判断业务或调用模型|
+
+这些是规范中的职责分配，不表示任意账户、工作群或集成已经接通。管理员须分别完成现有平台的接入与授权。
+
+规范仓库维护规则与指南；[展示网站](https://www.bluexiii.com/flow/)由独立的 [flow 仓库](https://github.com/xiiiblue/flow)维护并发布审阅后的公开快照。网站不是运行服务，也不会修改群配置或工具权限。
 
 ## 从哪里开始
 
 |你要做什么|阅读|
 |---|---|
+|在企微群提问、报 Bug、提需求|[用户使用指南](docs/USER_GUIDE.md)|
 |了解角色、授权和交付|[核心流程](docs/WORKFLOW.md)|
 |处理群咨询、Bug 或需求|[群入口](docs/GROUP_INTAKE.md)|
 |把规范映射到现有工具|[工具适配](docs/ADAPTERS.md)|
@@ -24,7 +39,7 @@ python3 scripts/check_docs.py
 ## 当前采用的方式
 
 - 负责人在 **dots 原生本人主对话**评审、授权并接收私有结果；企微审批和历史执行许可均不启用。
-- 已授权临时群用于咨询、反馈和可公开的登记回执；群内容不授予研发执行权限。
+- 管理员接入并授权的工作群用于咨询、反馈和可公开的登记回执；适用范围以实际接入配置为准，群内容不授予研发执行权限。
 - dots 先在自己的云端核对固定仓库代码/文档；必要的环境查询由已连接的 Mac mini Codex medium 受限只读完成。
 - 手动任务按有效授权分阶段推进。**自动开发关闭**；普通“继续”、既有反馈任务或历史批准都不能开启它。
 - 通用 [wecom-slack-bridge](https://github.com/xiiiblue/wecom-slack-bridge) 独立维护，采用传统接收确认与主动普通回复。流式演示已撤回；本规范不保证原生引用、真正 @ 人或群消息自动续接。
