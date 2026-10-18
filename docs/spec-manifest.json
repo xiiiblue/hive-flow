@@ -10,7 +10,8 @@
     "intake": {
       "docs/GROUP_INTAKE.md": ["*"],
       "docs/ITEM_LIFECYCLE.md": ["哪个入口可以写"],
-      "docs/ADAPTERS.md": ["规则与技术保障"]
+      "docs/ADAPTERS.md": ["规则与技术保障"],
+      "docs/SOURCE_SNAPSHOTS.md": ["代码调查与只读检索顺序"]
     },
     "review": {
       "docs/ITEM_LIFECYCLE.md": ["*"],
@@ -20,7 +21,8 @@
       "AGENTS.md": ["*"],
       "docs/WORKFLOW.md": ["*"],
       "docs/ITEM_LIFECYCLE.md": ["可照做的收尾顺序"],
-      "docs/ADAPTERS.md": ["开发任务的阶段衔接", "环境查询与部署边界"]
+      "docs/ADAPTERS.md": ["开发任务的阶段衔接", "环境查询与部署边界"],
+      "docs/SOURCE_SNAPSHOTS.md": ["代码调查与只读检索顺序"]
     }
   }
 }

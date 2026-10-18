@@ -28,6 +28,7 @@ HiveFlow is an agent collaboration specification, not a deployable service. The 
 |在企微群提问、报 Bug、提需求|[用户使用指南](docs/USER_GUIDE.md)|
 |了解角色、授权和交付|[核心流程](docs/WORKFLOW.md)|
 |处理群咨询、Bug 或需求|[群入口](docs/GROUP_INTAKE.md)|
+|在已授权范围内缓存与静态查询代码|[云端过滤源码快照](docs/SOURCE_SNAPSHOTS.md)|
 |把规范映射到现有工具|[工具适配](docs/ADAPTERS.md)|
 |写清楚通知和追问|[交互示例](docs/OWNER_COMMANDS.md)|
 |核对边界与验证程度|[验收清单](docs/ACCEPTANCE.md)|
