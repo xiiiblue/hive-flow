@@ -4,7 +4,7 @@
 
 |任务路线|最少相关章节（均为同一 SHA）|
 |---|---|
-|群反馈 intake|[群入口全文](GROUP_INTAKE.md)、[事项写入边界](ITEM_LIFECYCLE.md#哪个入口可以写)、[工具保障与缺口](ADAPTERS.md#规则与技术保障)、[代码调查顺序](SOURCE_SNAPSHOTS.md#代码调查与只读检索顺序)|
+|群反馈 intake|[群入口全文](GROUP_INTAKE.md)、[事项写入边界](ITEM_LIFECYCLE.md#哪个入口可以写)、[工具保障与缺口](ADAPTERS.md#规则与技术保障)、[现场查询边界](ADAPTERS.md#环境查询与部署边界)、[代码调查顺序](SOURCE_SNAPSHOTS.md#代码调查与只读检索顺序)|
 |Issue 采纳评审／只读扫描|[事项决定与收尾全文](ITEM_LIFECYCLE.md)、[角色与边界](WORKFLOW.md#角色与边界)、[从反馈到方案](WORKFLOW.md#从反馈到方案)、[意图、关联、权限](WORKFLOW.md#意图关联权限分别核验)|
 |研发交付准备或已授权实施|[项目规则全文](../AGENTS.md)、[核心流程全文](WORKFLOW.md)、[事项收尾顺序](ITEM_LIFECYCLE.md#可照做的收尾顺序)、[开发阶段衔接](ADAPTERS.md#开发任务的阶段衔接)、[环境边界](ADAPTERS.md#环境查询与部署边界)、[代码调查顺序](SOURCE_SNAPSHOTS.md#代码调查与只读检索顺序)|
 

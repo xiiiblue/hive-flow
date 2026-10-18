@@ -15,4 +15,5 @@ jobs:
       - run: python3 scripts/check_docs.py
       - run: python3 -B scripts/test_spec_loading.py
       - run: python3 -B scripts/test_source_snapshot.py
+      - run: python3 -B scripts/test_diagnostic_boundaries.py
       - run: git diff --check
