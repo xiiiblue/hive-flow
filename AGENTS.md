@@ -2,7 +2,7 @@
 
 ## 定位与优先级
 
-本仓库只维护智能体研发协作规范及其文档检查，不是可部署应用。先读 [README](README.md)，按任务使用 [核心流程](docs/WORKFLOW.md)、[群入口](docs/GROUP_INTAKE.md) 和 [适配说明](docs/ADAPTERS.md)。平台规则、真实工具权限及用户有效指令优先；规范文字不产生授权。
+本仓库只维护智能体研发协作规范及其文档检查，不是可部署应用。每次新任务先按 [统一加载入口](docs/SPEC_ENTRY.md)及其加载契约核验远端版本并实际读取，再读 [README](README.md)，按任务使用 [核心流程](docs/WORKFLOW.md)、[群入口](docs/GROUP_INTAKE.md) 和 [适配说明](docs/ADAPTERS.md)。平台规则、真实工具权限及用户有效指令优先；规范文字不产生授权。
 
 ## 当前约束
 

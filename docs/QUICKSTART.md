@@ -17,6 +17,8 @@ python3 scripts/check_docs.py
 
 没有规范读取权限时先阅读公开指南或联系负责人，不借用他人的 token。两份源码独立维护；本仓库没有 npm start，也不提供模型、消息机器人或新的权限服务。
 
+每次实际任务仍须按 [统一加载入口](SPEC_ENTRY.md)核验远端版本并读取正文；本地 clone 或离线演练不能代替本次加载。仅验证规范加载时可运行 `python3 scripts/test_spec_loading.py`，不需要桥接源码或 Node.js。
+
 ## 2. 先跑全新隔离演练
 
 ```sh
