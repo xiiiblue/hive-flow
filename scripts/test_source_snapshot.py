@@ -336,6 +336,87 @@ class SnapshotTests(unittest.TestCase):
             with self.subTest(key=key, value=value), self.assertRaises(snapshot.SnapshotError):
                 snapshot.inventory_check(inv)
 
+    def test_build_document_formats_included_with_content_checks(self):
+        files = {'.dockerignore': b'node_modules\n', '.nvmrc': b'24\n',
+                 'build/api.Dockerfile': b'FROM scratch\n', 'nginx.conf': b'worker_processes 1;\n',
+                 'nginx.conf.template': b'worker_processes 1;\n',
+                 'example.service': b'[Service]\nExecStart=/usr/bin/example\n',
+                 'example.timer': b'[Timer]\nOnCalendar=daily\n', 'docs/flow.mmd': b'graph LR; A-->B\n'}
+        for path, data in files.items():
+            self.write(path, data)
+        self.write('unsafe.conf.template', b'api_key=synthetic-sensitive-value\n')
+        inv, batch = self.commit()
+        result = self.build(inv, batch)
+        manifest = snapshot.verify(Path(result['snapshot']), inv)
+        included = {r['path'] for r in manifest['included']}
+        self.assertTrue(set(files) <= included)
+        self.assertEqual({r['path']: r['reason'] for r in manifest['excluded']}['unsafe.conf.template'],
+                         'pending_review_secret_literal')
+
+    def test_explicit_auth_paths_remain_excluded_under_templates(self):
+        for path in ['hive.env.example', 'deploy/hive.env.example', '.npmrc', '.npmrc.example',
+                     'disabled-telegram-bot-token', 'disabled-wecom-aibot-secret',
+                     'disabled-wecom-aibot-secret.conf.template', 'hive.env.conf.template']:
+            with self.subTest(path=path):
+                self.assertEqual(snapshot.path_filter({'path': path, 'mode': '100644', 'size': 4}),
+                                 'secret_or_auth_path')
+        self.assertIsNone(snapshot.path_filter({'path': '.env.example', 'mode': '100644', 'size': 4}))
+
+    def test_legacy_policy_never_reused_or_overwritten_same_sha(self):
+        result = self.build()
+        location = Path(result['snapshot'])
+        path = location / 'manifest.json'
+        legacy = json.loads(path.read_text())
+        for field in ['filter_policy', 'candidate_set_sha256', 'included_set_sha256']:
+            legacy.pop(field)
+        path.chmod(0o644)
+        path.write_bytes(snapshot.canonical(legacy))
+        path.chmod(0o444)
+        original = path.read_bytes()
+        with snapshot.locked(self.cache):
+            for operation in [lambda: snapshot.plan(self.cache, self.inv),
+                              lambda: snapshot.build(self.cache, self.inv, self.batch),
+                              lambda: snapshot.verify(location, self.inv),
+                              lambda: snapshot.rules(self.cache, self.inv, ['src'], [])]:
+                with self.assertRaisesRegex(snapshot.SnapshotError, 'NEW independent cache'):
+                    operation()
+        self.assertEqual(path.read_bytes(), original)
+        fresh = self.area / 'fresh-policy-cache'
+        snapshot.initialize(fresh)
+        with snapshot.locked(fresh):
+            rebuilt = snapshot.build(fresh, self.inv, self.batch)
+        self.assertNotEqual(rebuilt['snapshot'], result['snapshot'])
+        self.assertEqual(snapshot.verify(Path(rebuilt['snapshot']))['filter_policy'], snapshot.filter_policy())
+        self.assertEqual(path.read_bytes(), original)
+
+    def test_policy_change_blocks_same_sha_and_previous_reuse(self):
+        result = self.build()
+        with mock.patch.object(snapshot, 'FILTER_POLICY_VERSION', snapshot.FILTER_POLICY_VERSION + 1):
+            with self.assertRaisesRegex(snapshot.SnapshotError, 'filter policy'):
+                self.build()
+            self.write('src/new.py', b'# new\n')
+            inv, batch = self.commit()
+            with self.assertRaisesRegex(snapshot.SnapshotError, 'filter policy'):
+                self.build(inv, batch, self.inv['commit'])
+        self.assertEqual(snapshot.verify(Path(result['snapshot']))['state'], 'ready')
+
+    def test_candidate_and_included_set_identifiers_rechecked(self):
+        result = self.build()
+        path = Path(result['snapshot']) / 'manifest.json'
+        original = path.read_bytes()
+        for field in ['candidate_set_sha256', 'included_set_sha256']:
+            manifest = json.loads(original)
+            manifest[field] = '0' * 64
+            path.chmod(0o644)
+            path.write_bytes(snapshot.canonical(manifest))
+            path.chmod(0o444)
+            with self.assertRaisesRegex(snapshot.SnapshotError, 'set identity mismatch'):
+                self.build()
+        path.chmod(0o644)
+        path.write_bytes(original)
+        path.chmod(0o444)
+        self.assertEqual(snapshot.verify(Path(result['snapshot']))['state'], 'ready')
+
     def test_binary_runtime_and_oversized_path_filters(self):
         for path, size, reason in [('image.png', 12, 'binary_format'), ('huge.py', snapshot.MAX_FILE + 1, 'oversized'),
                                    ('logs/debug.txt', 12, 'generated_or_runtime_data'),

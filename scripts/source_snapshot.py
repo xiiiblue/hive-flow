@@ -6,6 +6,7 @@ import binascii
 import contextlib
 import fcntl
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -16,6 +17,7 @@ import sys
 import uuid
 
 SCHEMA = 1
+FILTER_POLICY_VERSION = 2
 MAX_FILE = 2 * 1024 * 1024
 MAX_INPUT = 64 * 1024 * 1024
 MARKER = {'tool': 'hiveflow-filtered-source-snapshot', 'schema_version': SCHEMA}
@@ -23,8 +25,9 @@ SHA = re.compile(r'[0-9a-f]{40}')
 TEXT_EXT = {'.py', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json', '.yaml', '.yml',
             '.toml', '.md', '.txt', '.html', '.css', '.scss', '.sql', '.sh', '.bash', '.ini',
             '.cfg', '.xml', '.properties', '.vue', '.svelte', '.go', '.rs', '.java', '.kt',
-            '.c', '.h', '.cpp', '.hpp', '.rb', '.php', '.proto', '.graphql', '.svg'}
-TEXT_NAMES = {'dockerfile', 'makefile', 'license', '.gitignore', '.editorconfig', '.gitattributes'}
+            '.c', '.h', '.cpp', '.hpp', '.rb', '.php', '.proto', '.graphql', '.svg',
+            '.dockerfile', '.conf', '.service', '.timer', '.mmd'}
+TEXT_NAMES = {'dockerfile', 'makefile', 'license', '.gitignore', '.editorconfig', '.gitattributes', '.dockerignore', '.nvmrc'}
 EXCLUSION_REASONS = {'symlink', 'submodule', 'secret_or_auth_path', 'oversized',
                      'pending_review_unknown_format', 'binary_or_non_utf8', 'secret_pattern',
                      'pending_review_secret_literal', 'binary_format', 'generated_or_runtime_data'}
@@ -134,6 +137,8 @@ def path_filter(entry):
     template = name in {'.env.example', '.env.sample', '.env.template'}
     if (any(p in {'.ssh', '.aws', '.gnupg', '.npm', 'secrets', 'credentials', 'auth-data', 'sessions', 'cookies', 'tokens', '.auth'} for p in parts)
             or name.startswith('.npmrc') or (name.startswith('.env') and not template)
+            or (not template and ('.env.' in name or name.endswith('.env')))
+            or name.startswith(('disabled-telegram-bot-token', 'disabled-wecom-aibot-secret'))
             or name in {'id_rsa', 'id_ed25519', '.netrc', '.pypirc', 'credentials.json', 'auth.json',
                         'token.json', 'tokens.json', 'cookies.txt', 'keychain.json'}
             or path.suffix.lower() in {'.pem', '.key', '.p12', '.pfx', '.keystore'}):
@@ -142,7 +147,7 @@ def path_filter(entry):
         return 'binary_format'
     if entry.get('size', 0) > MAX_FILE:
         return 'oversized'
-    if not template and path.suffix.lower() not in TEXT_EXT and name not in TEXT_NAMES:
+    if not template and not name.endswith('.conf.template') and path.suffix.lower() not in TEXT_EXT and name not in TEXT_NAMES:
         return 'pending_review_unknown_format'
     return None
 
@@ -171,13 +176,32 @@ def content_filter(data, path=""):
         if not placeholder:
             return 'pending_review_secret_literal'
     config = PurePosixPath(path)
-    if config.suffix.lower() in {'.yaml', '.yml', '.toml', '.ini', '.cfg', '.properties'} or config.name.startswith('.env.'):
+    if config.suffix.lower() in {'.yaml', '.yml', '.toml', '.ini', '.cfg', '.properties', '.conf', '.service', '.timer'} or config.name.startswith('.env.') or config.name.lower().endswith('.conf.template'):
         unquoted = re.compile(r'(?im)^\s*(?:export\s+)?(?:[\w-]*[_-])?(?:password|passwd|secret|token|api[_-]?key|client[_-]?secret|access[_-]?key)\s*[:=]\s*([^\n#]+)')
         for match in unquoted.finditer(text):
             value = match.group(1).strip().strip('"' + "'")
             if value and value.lower() not in {'placeholder', 'placeholder-only', 'changeme', 'example', 'redacted', 'your-token', 'your-secret', 'your-password'} and not re.fullmatch(r'(?:\$\{[^}]+\}|<[^>]+>)', value):
                 return 'pending_review_secret_literal'
     return None
+
+
+def filter_policy():
+    # Fingerprint actual filter code as well as the named version and allowlist.
+    # A logic change cannot silently reuse an old same-commit inclusion set.
+    config = {'version': FILTER_POLICY_VERSION, 'max_file': MAX_FILE,
+              'extensions': sorted(TEXT_EXT), 'names': sorted(TEXT_NAMES),
+              'path_filter': inspect.getsource(path_filter), 'content_filter': inspect.getsource(content_filter)}
+    return {'version': FILTER_POLICY_VERSION, 'sha256': hash256(canonical(config))}
+
+
+def candidate_set(inv):
+    candidates = [{'path': e['path'], 'blob': e['sha'], 'size': e['size']} for e in inv['entries']
+                  if e['type'] != 'tree' and path_filter(e) is None]
+    return hash256(canonical(sorted(candidates, key=lambda e: e['path'])))
+
+
+def included_set(records):
+    return hash256(canonical(sorted(records, key=lambda e: e['path'])))
 
 
 def version_identity(inv):
@@ -228,7 +252,10 @@ def location(root, repo, commit):
 def verify(snapshot, expected=None):
     no_symlinks(snapshot)
     manifest = read_json(snapshot / 'manifest.json')
-    need(set(manifest) == {'schema_version', 'state', 'inventory', 'inventory_sha256', 'included', 'excluded', 'failed'}, 'snapshot manifest fields')
+    need(manifest.get('filter_policy') == filter_policy(),
+         'filter policy missing/mismatch; rebuild in a NEW independent cache; existing snapshot left untouched')
+    need(set(manifest) == {'schema_version', 'filter_policy', 'candidate_set_sha256', 'included_set_sha256',
+                          'state', 'inventory', 'inventory_sha256', 'included', 'excluded', 'failed'}, 'snapshot manifest fields')
     inv = manifest['inventory']
     leaves = inventory_check(inv)
     need(type(manifest['schema_version']) is int and manifest['schema_version'] == SCHEMA and manifest['state'] == 'ready' and not manifest['failed']
@@ -237,6 +264,8 @@ def verify(snapshot, expected=None):
         need(version_identity(inv) == version_identity(expected), 'same SHA inventory identity differs')
     included, excluded = manifest['included'], manifest['excluded']
     need(isinstance(included, list) and isinstance(excluded, list), 'manifest records')
+    need(manifest['candidate_set_sha256'] == candidate_set(inv)
+         and manifest['included_set_sha256'] == included_set(included), 'candidate/included set identity mismatch; rebuild in a NEW cache')
     records = included + excluded
     need(len(records) == len(leaves) and {r['path'] for r in records} == set(leaves), 'incomplete snapshot manifest')
     files = snapshot / 'files'
@@ -331,7 +360,9 @@ def build(root, inv, batch, previous=None):
     payload = staging / 'snapshot'
     payload.mkdir()
     (payload / 'files').mkdir()
-    manifest = {'schema_version': SCHEMA, 'state': 'building', 'inventory': inv,
+    manifest = {'schema_version': SCHEMA, 'filter_policy': filter_policy(),
+                'candidate_set_sha256': candidate_set(inv), 'included_set_sha256': included_set([]),
+                'state': 'building', 'inventory': inv,
                 'inventory_sha256': hash256(canonical(inv)), 'included': [], 'excluded': excluded, 'failed': []}
     try:
         for path in candidates:
@@ -361,6 +392,7 @@ def build(root, inv, batch, previous=None):
                 manifest['included'].append({'path': path, 'blob': entry['sha'], 'size': len(data), 'sha256': hash256(data)})
             except SnapshotError as error:
                 manifest['failed'].append({'path': path, 'reason': str(error)})
+        manifest['included_set_sha256'] = included_set(manifest['included'])
         manifest['state'] = 'failed' if manifest['failed'] else 'ready'
         if manifest['failed']:
             report = root / 'reports' / (inv['commit'] + '-' + uuid.uuid4().hex + '.json')
@@ -378,6 +410,7 @@ def build(root, inv, batch, previous=None):
     except (OSError, SnapshotError) as error:
         if not manifest['failed']:
             manifest['state'] = 'failed'
+            manifest['included_set_sha256'] = included_set(manifest['included'])
             manifest['failed'].append({'path': '<publication>', 'reason': type(error).__name__})
             report = root / 'reports' / (inv['commit'] + '-' + uuid.uuid4().hex + '.json')
             with report.open('xb') as out:
@@ -470,6 +503,8 @@ def main():
                     verify(destination, inv)
                     result = {'state': 'ready', 'snapshot': str(destination)}
         if args.command != 'init':
+            result['filter_policy'] = filter_policy()
+            result['candidate_set_sha256'] = candidate_set(inv)
             result['observation'] = {k: inv[k] for k in ['repo', 'commit', 'tree_sha', 'default_branch', 'observed_at']}
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 1 if result['state'] == 'blocked_rules' else 0
