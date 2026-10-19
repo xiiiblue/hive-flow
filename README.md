@@ -61,4 +61,4 @@ python3 scripts/check_docs.py
 
 手动研发交付、PR 完成评论唤醒与跨天原群回传见 [手动交付契约](docs/MANUAL_DELIVERY.md)。默认 Mac mini Codex 手动处理，自动开发保持关闭。
 
-[有限批次自动模式](docs/AUTOMATION_DESIGN.md)仅为尚未实现、未启用的设计建议；不属于现行执行授权或自动任务配置。
+[有限批次控制工具](docs/BATCH_CONTROL.md)已实现合作式状态控制与合成测试，默认停用；实际业务执行适配、原生定时及停止恢复尚需现场验收。[自动模式建议](docs/AUTOMATION_DESIGN.md)不属于现行 Issue 执行授权或任务配置。

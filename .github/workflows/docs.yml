@@ -13,6 +13,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 scripts/check_docs.py
+      - run: python3 -B scripts/test_batch_control.py
+      - run: python3 -B scripts/test_delivery.py
       - run: python3 -B scripts/test_spec_loading.py
       - run: python3 -B scripts/test_source_snapshot.py
       - run: python3 -B scripts/test_diagnostic_boundaries.py
