@@ -203,4 +203,81 @@ class AdoptionTests(unittest.TestCase):
         self.assertNotEqual(bad.returncode,0)
 
 
+def idle_envelope(op='initialize', record=None, **changes):
+    data=dict(operation=op,record=deepcopy(record),expectedBlobSHA='a'*40 if record is not None else None,
+              observedBlobSHA='a'*40 if record is not None else None)
+    data.update(changes)
+    return data
+
+
+class IdleTests(unittest.TestCase):
+    def setUp(self):
+        self.idle=plan(idle_envelope())['record']
+
+    def test_initialize_contains_no_invented_identity(self):
+        self.assertEqual(self.idle,dict(schemaVersion=1,state='idle',executionEnabled=False,revision=0))
+        self.assertEqual(plan(idle_envelope())['nextAction'],'initialize_disabled_then_readback_only')
+
+    def test_existing_idle_is_read_only_and_idempotent(self):
+        for op in ('initialize','inspect_idle'):
+            result=plan(idle_envelope(op,self.idle))
+            self.assertFalse(result['write'])
+            self.assertEqual(result['nextAction'],'idle_do_not_execute')
+        with self.assertRaises(ValueError): plan(idle_envelope('inspect_idle'))
+
+    def test_idle_rejects_added_authority_and_corrupt_values(self):
+        for key,value in [('configId','fake'),('issue',None),('decision',None),('runId',None),
+                          ('executionEnabled',True),('executionEnabled',0),('revision',True),
+                          ('revision',1),('schemaVersion',True),('state','pending')]:
+            altered={**self.idle,key:value}
+            with self.subTest(key=key,value=value), self.assertRaises(ValueError):
+                plan(idle_envelope(record=altered))
+        with self.assertRaises(ValueError): plan({**idle_envelope(),'config':None})
+
+    def test_initialization_never_resets_real_or_unknown_records(self):
+        records=[{},pending(),claimed()]
+        for stage in ('blocked','unknown'):
+            records.append(plan(envelope(stage,claimed(),result=dict(stage=stage,evidenceUrls=[])))['record'])
+        records.append(plan(envelope('cancel',pending()))['record'])
+        records.append(plan(envelope('complete',claimed(),result=dict(stage='full_delivery',evidenceUrls=['https://github.com/xiiiblue/hive-os/issues/424242'])))['record'])
+        for record in records:
+            with self.subTest(state=record.get('state')),self.assertRaises(ValueError):
+                plan(idle_envelope(record=record))
+
+    def test_idle_to_adopted_uses_existing_sha_and_real_config(self):
+        for mode in ('pr_review','full_delivery'):
+            data=envelope(record=self.idle)
+            data['config']['mode']=mode
+            result=plan(data)
+            self.assertTrue(result['write'])
+            self.assertEqual(result['record']['state'],'pending')
+            self.assertEqual(result['record']['revision'],1)
+            self.assertNotIn('executionEnabled',result['record'])
+            self.assertEqual(result['nextAction'],'cas_write_then_readback_no_business_replay')
+            self.assertFalse(plan(envelope(record=result['record'],config=data['config']))['write'])
+
+    def test_idle_transition_still_rejects_inactive_or_invalid_decisions(self):
+        variants=[envelope(record=self.idle,nativeActive=False),envelope(record=self.idle,observedBlobSHA='b'*40)]
+        data=envelope(record=self.idle);data['config']['executionEnabled']=False;variants.append(data)
+        data=envelope(record=self.idle);data['decision']['decidedAt']='2029-01-01T00:00:00Z';variants.append(data)
+        data=envelope(record=self.idle);data['observedIssue']['state']='closed';variants.append(data)
+        for data in variants:
+            before=deepcopy(data)
+            with self.assertRaises(ValueError): plan(data)
+            self.assertEqual(data,before)
+        for changes in (dict(expectedBlobSHA=None,observedBlobSHA=None),dict(observedBlobSHA='b'*40)):
+            with self.assertRaises(ValueError): plan(idle_envelope(record=self.idle,**changes))
+
+    def test_idle_cannot_be_claimed_executed_or_cancelled_as_real_work(self):
+        for op in ('claim','guard','complete','cancel','unknown','blocked'):
+            with self.subTest(op=op), self.assertRaises(ValueError):
+                plan(envelope(op,self.idle))
+
+    def test_consumed_slot_cannot_be_replaced_by_idle_or_another_decision(self):
+        real=plan(envelope(record=self.idle))['record']
+        other=envelope(record=real);other['decision']['sourceRef']='dots-decision:another00001'
+        with self.assertRaises(ValueError): plan(other)
+        with self.assertRaises(ValueError): plan(idle_envelope(record=real))
+
+
 if __name__ == '__main__': unittest.main()

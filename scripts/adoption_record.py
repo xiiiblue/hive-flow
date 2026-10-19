@@ -117,7 +117,35 @@ def live(config, now, native_active):
     require(stamp(config['activationBoundary']) < stamp(now) <= stamp(config['authorizedEnd']), 'not active window')
 
 
+def validate_idle(record):
+    fields(record, 'schemaVersion state executionEnabled revision')
+    require(type(record['schemaVersion']) is int and record['schemaVersion'] == 1, 'idle schema')
+    require(record['state'] == 'idle' and record['executionEnabled'] is False, 'idle must remain disabled')
+    require(type(record['revision']) is int and record['revision'] == 0, 'initial idle revision')
+    return record
+
+
+def validate_snapshot(record, expected, observed):
+    # Values must come from a fresh read of the SAME fixed ref/path.
+    for sha in (expected, observed):
+        require(sha is None or (type(sha) is str and re.fullmatch(r'[0-9a-f]{40}', sha)), 'blob SHA')
+    require(expected == observed, 'conflict: reread, do not replay stale proposal')
+    require((record is None) == (observed is None), 'missing record/SHA mismatch')
+
+
 def plan(envelope):
+    require(type(envelope) is dict, 'object required')
+    if envelope.get('operation') in ('initialize', 'inspect_idle'):
+        fields(envelope, 'operation record expectedBlobSHA observedBlobSHA')
+        record = deepcopy(envelope['record'])
+        validate_snapshot(record, envelope['expectedBlobSHA'], envelope['observedBlobSHA'])
+        if record is not None:
+            validate_idle(record)
+            return dict(write=False, nextAction='idle_do_not_execute', record=record)
+        require(envelope['operation'] == 'initialize', 'idle record absent')
+        idle = dict(schemaVersion=1, state='idle', executionEnabled=False, revision=0)
+        validate_idle(idle)
+        return dict(write=True, nextAction='initialize_disabled_then_readback_only', record=idle)
     fields(envelope, 'operation config observedIssue now nativeActive record expectedBlobSHA observedBlobSHA runId decision result')
     config = validate_config(envelope['config'])
     observed = envelope['observedIssue']
@@ -127,11 +155,7 @@ def plan(envelope):
     op = envelope['operation']
     require(op in ('create', 'claim', 'guard', 'cancel', 'unknown', 'blocked', 'complete'), 'operation')
     record = deepcopy(envelope['record'])
-    # SHA values must come from a fresh read of the SAME fixed ref/path.
-    for sha in (envelope['expectedBlobSHA'], envelope['observedBlobSHA']):
-        require(sha is None or (type(sha) is str and re.fullmatch(r'[0-9a-f]{40}', sha)), 'blob SHA')
-    require(envelope['expectedBlobSHA'] == envelope['observedBlobSHA'], 'conflict: reread, do not replay stale proposal')
-    require((record is None) == (envelope['observedBlobSHA'] is None), 'missing record/SHA mismatch')
+    validate_snapshot(record, envelope['expectedBlobSHA'], envelope['observedBlobSHA'])
     if op != 'create':
         require(envelope['decision'] is None, 'unexpected decision')
     if op not in ('complete', 'unknown', 'blocked'):
@@ -150,13 +174,18 @@ def plan(envelope):
                         decision='adopted', issue=identity, decidedAt=decision['decidedAt'], sourceRef=decision['sourceRef'],
                         state='pending', revision=0, cancelRequested=False, claim=None, result=None)
         validate_record(proposed, config, observed)
-        if record is not None:
+        was_idle = type(record) is dict and record.get('state') == 'idle'
+        if was_idle:
+            validate_idle(record)
+            proposed['revision'] = record['revision'] + 1
+        elif record is not None:
             validate_record(record, config, observed)
             require(all(record[k] == proposed[k] for k in ('decisionId', 'decidedAt', 'sourceRef')), 'occupied slot: no replacement or historical replay')
             return dict(write=False, nextAction='reconcile_existing_record', record=record)
         live(config, envelope['now'], envelope['nativeActive'])
         require(observed['state'] == 'open', 'closed issue cannot be selected')
-        return dict(write=True, nextAction='write_then_readback_only', record=proposed)
+        validate_record(proposed, config, observed)
+        return dict(write=True, nextAction='cas_write_then_readback_no_business_replay' if was_idle else 'write_then_readback_only', record=proposed)
     require(record is not None, 'record required')
     validate_record(record, config, observed)
     require(stamp(record['decidedAt']) <= stamp(envelope['now']), 'future record')
