@@ -61,4 +61,4 @@ python3 scripts/check_docs.py
 
 手动研发交付、PR 完成评论唤醒与跨天原群回传见 [手动交付契约](docs/MANUAL_DELIVERY.md)。默认 Mac mini Codex 手动处理，自动开发保持关闭。
 
-[有限批次自动模式](docs/AUTOMATION_DESIGN.md)仅为尚未实现、未启用的设计建议；不属于现行执行授权或自动任务配置。
+后续自动研发采用 [Codex 桌面原生 Automations](docs/AUTOMATION_DESIGN.md)：指定本地 HiveOS 项目、原生 worktree、任务指令及 ACTIVE/PAUSED；不自建 CLI 调度或批次控制层。目前范围、期限、数量、阶段和运行时间待配置，未创建或启用任务；互斥、停止和去重按实测或流程约束说明，不构成硬隔离保证。
