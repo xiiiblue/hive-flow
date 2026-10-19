@@ -210,9 +210,17 @@ class BatchTests(unittest.TestCase):
   with self.c.session(self.p['batchId']) as send:
    claim=self.claim(send)
    self.assertTrue(self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='modify',evidenceRef=None)['allowed'])
-   (area/'synthetic.txt').write_text('synthetic change\n')
-   git('add','synthetic.txt');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-qm','synthetic')
-   commit=git('rev-parse','HEAD');git('push','origin','HEAD:refs/heads/synthetic')
+   self.assertTrue(self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='modify',evidenceRef=None,effectId='write-stage',inputDigest=digest('write and stage synthetic.txt'))['executeOnce'])
+   (area/'synthetic.txt').write_text('synthetic change\n');git('add','synthetic.txt')
+   self.cmd(send,'settle',runId=claim['runId'],taskId=claim['taskId'],effectId='write-stage',outcome='confirmed',evidenceRef='observed staged synthetic file',resultDigest=digest(git('diff','--cached')))
+   self.assertTrue(self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='commit',evidenceRef='synthetic checks passed')['allowed'])
+   self.assertTrue(self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='commit',evidenceRef='synthetic checks passed',effectId='commit-one',inputDigest=digest('commit staged fixture'))['executeOnce'])
+   git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-qm','synthetic');commit=git('rev-parse','HEAD')
+   self.cmd(send,'settle',runId=claim['runId'],taskId=claim['taskId'],effectId='commit-one',outcome='confirmed',evidenceRef='actual local commit receipt',resultDigest=digest(commit))
+   self.assertTrue(self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='push',evidenceRef='actual local commit '+commit)['allowed'])
+   self.assertTrue(self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='push',evidenceRef='actual local commit '+commit,effectId='push-one',inputDigest=digest({'commit':commit,'target':'local synthetic branch'}))['executeOnce'])
+   git('push','origin','HEAD:refs/heads/synthetic')
+   self.cmd(send,'settle',runId=claim['runId'],taskId=claim['taskId'],effectId='push-one',outcome='confirmed',evidenceRef='actual local remote ref',resultDigest=digest(git('ls-remote','origin','refs/heads/synthetic')))
    self.cmd(send,'finish',runId=claim['runId'],taskId=claim['taskId'],outcome='pr_ready',evidenceRef='mock GitHub PR; local git receipt',record=record(claim,commit))
    self.assertEqual(git('ls-remote','origin','refs/heads/synthetic').split()[0],commit)
 
@@ -291,6 +299,141 @@ class BatchTests(unittest.TestCase):
    req=dict(action='finish',operationId='one-result',runId=claim['runId'],taskId=claim['taskId'],outcome='blocked',evidenceRef='first evidence',record=None)
    send(req);req['evidenceRef']='different evidence'
    with self.assertRaises(Blocked):send(req)
+
+
+ def assert_semantic_corruption_blocks(self,sql,params=()):
+  self.enable()
+  with self.c.session(self.p['batchId']) as send:
+   self.c.db.execute(sql,params)
+   snapshot=[tuple(r) for r in self.c.db.execute('SELECT * FROM items ORDER BY issue')]
+   for request in [dict(action='next',operationId='bad-next'),dict(action='claim',operationId='bad-claim',preflight=preflight(99))]:
+    with self.assertRaises(Blocked):send(request)
+  self.assertEqual([tuple(r) for r in self.c.db.execute('SELECT * FROM items ORDER BY issue')],snapshot)
+  with self.assertRaises(Blocked):Controller(self.root,now=lambda:self.clock[0])
+
+ def test_semantic_replaced_issue_fails_without_reset(self):
+  self.assert_semantic_corruption_blocks('UPDATE items SET issue=99 WHERE issue=42')
+
+ def test_semantic_extra_pending_fails_without_reset(self):
+  self.assert_semantic_corruption_blocks('INSERT INTO items(batch,issue,position) VALUES (?,?,?)',(self.p['batchId'],99,3))
+
+ def test_semantic_reordered_item_fails(self):
+  self.assert_semantic_corruption_blocks('UPDATE items SET position=9 WHERE issue=42')
+
+ def test_semantic_status_without_run_fails(self):
+  self.assert_semantic_corruption_blocks("UPDATE items SET status='running' WHERE issue=42")
+
+ def test_semantic_run_item_association_fails(self):
+  self.enable()
+  with self.c.session(self.p['batchId']) as send:
+   claim=self.claim(send);self.c.db.execute("UPDATE runs SET issue=99 WHERE id=?",(claim['runId'],))
+   with self.assertRaises(Blocked):self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='modify',evidenceRef=None)
+  self.assertEqual(self.c.db.execute('SELECT issue FROM runs').fetchone()[0],99)
+  with self.assertRaises(Blocked):Controller(self.root,now=lambda:self.clock[0])
+
+ def test_expired_disabled_history_and_local_operation_ids_do_not_stop_new_batch(self):
+  self.enable()
+  old_req=None
+  with self.c.session(self.p['batchId']) as send:
+   self.assertTrue(send(dict(action='next',operationId='next-1'))['allowed'])
+   claim=self.claim(send)
+   old_req=dict(action='checkpoint',operationId='old-checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='test',evidenceRef=None)
+   self.assertTrue(send(old_req)['allowed']);self.finish(send,claim,'stopped')
+  self.c.stop(self.p['batchId']);self.clock[0]+=86400
+  b=copy.deepcopy(self.p);b.update(batchId='new-batch',startsAt='2030-01-02T08:00:00+08:00',endsAt='2030-01-03T08:00:00+08:00')
+  self.c.add(b);self.enable(b['batchId'],b)
+  before=self.c.status(b['batchId'])
+  with self.c.session(self.p['batchId']) as send:
+   self.assertFalse(send(dict(action='next',operationId='next-1'))['allowed'])
+   self.assertFalse(send(old_req)['allowed'])
+   self.assertFalse(self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='push',evidenceRef='old evidence')['allowed'])
+  self.assertEqual(self.c.status(b['batchId']),before)
+  with self.c.session(b['batchId']) as send:
+   self.assertTrue(send(dict(action='next',operationId='next-1'))['allowed'])
+   current=self.claim(send);self.clock[0]+=86400
+   self.assertFalse(self.cmd(send,'checkpoint',runId=current['runId'],taskId=current['taskId'],phase='modify',evidenceRef=None)['allowed'])
+   self.assertEqual(self.c.status(b['batchId'])['globalHalt'],'expired');self.finish(send,current,'stopped')
+
+ def test_genuine_global_risk_still_stops_all_batches(self):
+  b=copy.deepcopy(self.p);b['batchId']='approved-b';self.c.add(b);self.enable(b['batchId'],b)
+  with self.c.session(self.p['batchId']) as send:self.cmd(send,'halt',reason='suspected_leak')
+  self.assertFalse(self.c.status(b['batchId'])['enabled']);self.assertEqual(self.c.status(b['batchId'])['globalHalt'],'suspected_leak')
+
+ def test_effect_intent_confirmed_replay_never_grants_external_write_twice(self):
+  self.enable();external_writes=0
+  with self.c.session(self.p['batchId']) as send:
+   claim=self.claim(send)
+   request=dict(action='intent',operationId='pr-intent',runId=claim['runId'],taskId=claim['taskId'],phase='pr',evidenceRef='verified candidate',effectId='create-pr',inputDigest=digest('fixed PR target/head'))
+   permit=send(request);self.assertTrue(permit['executeOnce']);external_writes+=1
+   self.assertFalse(send(request)['allowed'])
+   self.assertFalse(self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='pr',evidenceRef='candidate')['allowed'])
+   settle=dict(action='settle',operationId='pr-confirmed',runId=claim['runId'],taskId=claim['taskId'],effectId='create-pr',outcome='confirmed',evidenceRef='observed existing mock PR',resultDigest=digest({'pr':7}))
+   self.assertTrue(send(settle)['recorded']);self.assertEqual(send(settle),send(settle))
+   replay={**request,'operationId':'another-request','effectId':'changed-id'}
+   self.assertFalse(send(replay)['allowed']);self.assertEqual(external_writes,1)
+   self.finish(send,claim)
+  with self.c.session(self.p['batchId']) as send:self.assertFalse(send(request)['allowed'])
+  self.assertEqual(external_writes,1)
+
+ def test_uncertain_effect_blocks_finish_and_requires_original_result_reconciliation(self):
+  self.enable()
+  with self.c.session(self.p['batchId']) as send:
+   claim=self.claim(send)
+   self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='pr',evidenceRef='candidate',effectId='create-pr',inputDigest=digest('mock existing PR'))
+   with self.assertRaises(Blocked):self.finish(send,claim)
+   self.cmd(send,'settle',runId=claim['runId'],taskId=claim['taskId'],effectId='create-pr',outcome='uncertain',evidenceRef='network outcome unknown',resultDigest=None)
+   self.assertFalse(self.cmd(send,'next')['allowed'])
+  with self.assertRaises(Blocked):self.c.reconcile(claim['runId'],claim['taskId'],'mock existing PR',True,'pr_ready',record(claim))
+  proof=dict(runId=claim['runId'],taskId=claim['taskId'],effectId='create-pr',evidenceRef='independently observed mock existing PR',verifiedIdle=True,outcome='confirmed',resultDigest=digest({'pr':7}))
+  self.c.reconcile_effect(proof);self.assertEqual(self.c.status(self.p['batchId'])['effects'][0]['status'],'confirmed')
+  result=self.c.reconcile(claim['runId'],claim['taskId'],'original task and PR reconciled',True,'pr_ready',record(claim))
+  self.assertEqual(result['deliveryId'],claim['deliveryId']);self.assertFalse(result['enabled'])
+
+ def test_crash_intent_becomes_uncertain_without_a_new_execution_permit(self):
+  self.enable()
+  with self.c.session(self.p['batchId']) as send:
+   claim=self.claim(send)
+   self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='push',evidenceRef='commit receipt',effectId='push',inputDigest=digest('push same commit'))
+  self.assertEqual(self.c.status(self.p['batchId'])['effects'][0]['status'],'uncertain')
+  with self.assertRaises(Blocked):self.c.enable(self.p['batchId'],digest(self.p),'old approval',True)
+
+ def test_stop_between_temporary_git_commit_and_push_prevents_push(self):
+  area=Path(self.tmp.name)/'stopped-checkout';remote=Path(self.tmp.name)/'stopped-remote.git';area.mkdir()
+  env={**os.environ,'GIT_CONFIG_GLOBAL':os.devnull,'GIT_CONFIG_SYSTEM':os.devnull,'GIT_CONFIG_NOSYSTEM':'1'}
+  def git(*args):return subprocess.check_output(['git','-c','core.hooksPath=/dev/null',*args],cwd=area,env=env,stderr=subprocess.DEVNULL).decode().strip()
+  git('init','-q');git('init','--bare','-q',str(remote));git('remote','add','origin',str(remote))
+  (area/'fixture').write_text('fixture');git('add','fixture')
+  self.enable()
+  with self.c.session(self.p['batchId']) as send:
+   claim=self.claim(send)
+   self.assertTrue(self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='commit',evidenceRef='mock checks passed')['allowed'])
+   self.assertTrue(self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='commit',evidenceRef='mock checks passed',effectId='commit',inputDigest=digest('fixture commit'))['executeOnce'])
+   git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-qm','synthetic');commit=git('rev-parse','HEAD')
+   self.cmd(send,'settle',runId=claim['runId'],taskId=claim['taskId'],effectId='commit',outcome='confirmed',evidenceRef='local commit exists',resultDigest=digest(commit))
+   self.c.stop(self.p['batchId'],True)
+   self.assertFalse(self.cmd(send,'checkpoint',runId=claim['runId'],taskId=claim['taskId'],phase='push',evidenceRef='local commit')['allowed'])
+   self.assertFalse(self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='push',evidenceRef='local commit',effectId='push',inputDigest=digest(commit))['allowed'])
+   self.assertEqual(git('ls-remote','origin'),'');self.finish(send,claim,'stopped')
+
+
+ def test_semantic_deleted_item_fails_without_reset(self):
+  self.assert_semantic_corruption_blocks('DELETE FROM items WHERE issue=43')
+
+ def test_old_state_schema_is_rejected_without_migration(self):
+  self.c.db.execute("UPDATE meta SET value='1' WHERE key='schema'")
+  with self.assertRaises(Blocked):Controller(self.root)
+  self.assertEqual(self.c.db.execute("SELECT value FROM meta WHERE key='schema'").fetchone()[0],'1')
+
+ def test_effect_receipt_write_failure_preserves_uncertainty(self):
+  self.enable()
+  with self.assertRaises(sqlite3.IntegrityError):
+   with self.c.session(self.p['batchId']) as send:
+    claim=self.claim(send)
+    self.cmd(send,'intent',runId=claim['runId'],taskId=claim['taskId'],phase='pr',evidenceRef='candidate',effectId='pr',inputDigest=digest('actual mock PR created'))
+    self.c.db.execute("CREATE TRIGGER fail_receipt BEFORE UPDATE OF status ON effects WHEN NEW.status='confirmed' BEGIN SELECT RAISE(FAIL,'mock receipt write failure');END")
+    self.cmd(send,'settle',runId=claim['runId'],taskId=claim['taskId'],effectId='pr',outcome='confirmed',evidenceRef='mock PR observed',resultDigest=digest({'pr':7}))
+  state=self.c.status(self.p['batchId']);self.assertEqual(state['items'][0]['status'],'unknown');self.assertEqual(state['effects'][0]['status'],'uncertain')
+  with self.c.session(self.p['batchId']) as send:self.assertFalse(self.cmd(send,'next')['allowed'])
 
 
 if __name__=='__main__':unittest.main()

@@ -108,10 +108,11 @@ class Controller:
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA synchronous=FULL')
         require(self.db.execute('PRAGMA quick_check').fetchone()[0] == 'ok', 'corrupt_state')
-        require(self.db.execute("SELECT value FROM meta WHERE key='schema'").fetchone()[0] == '1', 'state_schema')
+        require(self.db.execute("SELECT value FROM meta WHERE key='schema'").fetchone()[0] == '2', 'state_schema')
         self._session_batch = None
         self._session_digest = None
         self.now = now or (lambda: dt.datetime.now(dt.timezone.utc).timestamp())
+        self.validate_state()
 
     @staticmethod
     def initialize(root):
@@ -123,11 +124,12 @@ class Controller:
         os.chmod(root / 'control.sqlite', 0o600)
         db.executescript('''PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;
           CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-          INSERT INTO meta VALUES ('schema','1'),('halt',''),('last_clock','0');
+          INSERT INTO meta VALUES ('schema','2'),('halt',''),('last_clock','0');
           CREATE TABLE batches(id TEXT PRIMARY KEY,plan TEXT NOT NULL,digest TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,stop_current INTEGER NOT NULL DEFAULT 0,approval_ref TEXT,approved_digest TEXT);
           CREATE TABLE items(batch TEXT NOT NULL,issue INTEGER NOT NULL,position INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'pending',run TEXT UNIQUE,reason TEXT,evidence_ref TEXT,record TEXT,PRIMARY KEY(batch,issue));
           CREATE TABLE runs(id TEXT PRIMARY KEY,batch TEXT NOT NULL,issue INTEGER NOT NULL,task TEXT NOT NULL,delivery TEXT NOT NULL UNIQUE,phase TEXT NOT NULL,status TEXT NOT NULL);
-          CREATE TABLE operations(id TEXT PRIMARY KEY,digest TEXT NOT NULL,response TEXT NOT NULL);
+          CREATE TABLE operations(batch TEXT NOT NULL,id TEXT NOT NULL,digest TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(batch,id));
+          CREATE TABLE effects(run TEXT NOT NULL,id TEXT NOT NULL,phase TEXT NOT NULL,input_digest TEXT NOT NULL,status TEXT NOT NULL,evidence_ref TEXT,result_digest TEXT,PRIMARY KEY(run,id),UNIQUE(run,phase,input_digest));
         ''')
         db.close()
 
@@ -163,7 +165,49 @@ class Controller:
         p = validate_plan(strict_json(row['plan']))
         require(digest(p) == row['digest'], 'plan_digest_mismatch')
         require(p['controllerSha256'] == tool_fingerprint(), 'controller_version_changed')
+        require(row['enabled'] in (0,1) and row['stop_current'] in (0,1), 'invalid_batch_flags')
+        require((row['enabled']==0 and row['approval_ref'] is None) if row['approved_digest'] is None else row['approved_digest']==row['digest'] and text(row['approval_ref']), 'invalid_approval_snapshot')
+        self.validate_items(batch,p)
         return row, p
+
+    def validate_state(self):
+        for row in self.db.execute('SELECT id FROM batches').fetchall():
+            self.plan(row['id'])
+        for table in ['items','runs','operations']:
+            require(not self.db.execute('SELECT 1 FROM '+table+' t LEFT JOIN batches b ON b.id=t.batch WHERE b.id IS NULL').fetchone(), 'orphan_'+table)
+        require(not self.db.execute('SELECT 1 FROM effects e LEFT JOIN runs r ON r.id=e.run WHERE r.id IS NULL').fetchone(), 'orphan_effect')
+        require(self.db.execute("SELECT count(*) FROM items WHERE status IN ('running','unknown')").fetchone()[0]<=1, 'multiple_active_or_unknown_runs')
+
+    def validate_items(self,batch,p):
+        items=self.db.execute('SELECT * FROM items WHERE batch=? ORDER BY position',(batch,)).fetchall()
+        require(len(items)==len(p['issues']) and all(type(r['position']) is int and r['position']==i and type(r['issue']) is int and r['issue']==p['issues'][i] for i,r in enumerate(items)), 'items_do_not_match_immutable_plan')
+        runs={r['id']:r for r in self.db.execute('SELECT * FROM runs WHERE batch=?',(batch,))}
+        require({r['run'] for r in items if r['run'] is not None}==set(runs), 'item_run_set_mismatch')
+        require(sum(r['status']!='pending' for r in items)<=p['maxIssues'], 'quantity_state_mismatch')
+        for item in items:
+            status=item['status']
+            require(status in ['pending','paused','running','unknown','pr_ready','blocked','test_failed','stopped'], 'invalid_item_status')
+            if status in ['pending','paused']:
+                require(item['run'] is None and item['record'] is None, 'unclaimed_item_has_run')
+                require((item['reason'] is None and item['evidence_ref'] is None) if status=='pending' else item['reason']=='not_eligible' and text(item['evidence_ref']), 'unclaimed_item_metadata')
+                continue
+            run=runs.get(item['run'])
+            require(run is not None and run['issue']==item['issue'] and run['status']==status and text(run['task']) and text(item['evidence_ref']), 'item_run_identity_or_status_mismatch')
+            require(run['delivery']=='hf:'+batch+':'+str(item['issue'])+':'+run['id'][:12] and run['phase'] in ['claimed','modify','test','commit','push','pr','record'], 'run_delivery_or_phase_mismatch')
+            effects=self.db.execute('SELECT * FROM effects WHERE run=?',(run['id'],)).fetchall()
+            require(sum(e['status'] in ['intent','uncertain'] for e in effects)<=1, 'multiple_unsettled_effects')
+            for e in effects:
+                require(type(e['id']) is str and re.fullmatch(r'[A-Za-z0-9._:-]{1,128}',e['id']) and e['phase'] in ['modify','test','commit','push','pr','record'] and re.fullmatch('[0-9a-f]{64}',e['input_digest'] or ''), 'invalid_effect_identity')
+                require(e['status'] in ['intent','uncertain','confirmed','not_applied'], 'invalid_effect_status')
+                require((text(e['evidence_ref']) and bool(re.fullmatch('[0-9a-f]{64}',e['result_digest'] or ''))) if e['status']=='confirmed' else e['result_digest'] is None, 'invalid_effect_receipt')
+                if e['status']=='not_applied':require(text(e['evidence_ref']), 'missing_not_applied_evidence')
+                require(status in ['running','unknown'] or e['status'] in ['confirmed','not_applied'], 'terminal_run_has_unsettled_effect')
+                require(e['status']!='intent' or status=='running', 'intent_requires_running_run')
+                require(e['status']!='uncertain' or status=='unknown', 'uncertain_effect_requires_unknown_run')
+            if status=='pr_ready':
+                record=validate_delivery(strict_json(item['record']))
+                require(record['repository']==p['repository'] and record['issue']==item['issue'] and record['deliveryId']==run['delivery'] and positive(record['pullRequest']) and record['deployment']['status']=='not_required', 'stored_delivery_mismatch')
+            else:require(item['record'] is None, 'unexpected_stored_delivery')
 
     def halt(self, reason):
         self.db.execute("UPDATE meta SET value=? WHERE key='halt'", (reason,))
@@ -176,6 +220,9 @@ class Controller:
         if row['approved_digest'] != row['digest']:
             self.halt('approval_snapshot_mismatch')
             return 'approval_snapshot_mismatch'
+        active=self.db.execute("SELECT 1 FROM items WHERE batch=? AND status='running'",(batch,)).fetchone()
+        if not row['enabled'] and not active:
+            return 'batch_inactive'
         now = self.now()
         last = float(self.db.execute("SELECT value FROM meta WHERE key='last_clock'").fetchone()[0])
         if now < last - 1:
@@ -210,6 +257,7 @@ class Controller:
         # This explicit operator action is NOT identity authentication. Trusted host must verify it.
         require(text(approval_ref) and verified_idle is True, 'trusted_approval_and_idle_verification_required')
         with self.lease(), self.tx():
+            self.validate_state()
             row, p = self.plan(batch)
             require(row['digest'] == plan_digest, 'approval_plan_digest_mismatch')
             require(self.now() < instant(p['endsAt']), 'outside_approved_window')
@@ -231,15 +279,18 @@ class Controller:
         row, _ = self.plan(batch)
         return {'batchId':batch, 'planDigest':row['digest'], 'enabled':bool(row['enabled']), 'stopCurrent':bool(row['stop_current']),
                 'globalHalt':self.db.execute("SELECT value FROM meta WHERE key='halt'").fetchone()[0],
-                'items':[dict(r) for r in self.db.execute('SELECT issue,status,run,reason,evidence_ref FROM items WHERE batch=? ORDER BY position',(batch,))]}
+                'items':[dict(r) for r in self.db.execute('SELECT issue,status,run,reason,evidence_ref FROM items WHERE batch=? ORDER BY position',(batch,))],
+                'effects':[dict(r) for r in self.db.execute('SELECT e.run,e.id,e.phase,e.status,e.evidence_ref,e.result_digest FROM effects e JOIN runs r ON r.id=e.run WHERE r.batch=? ORDER BY e.run,e.id',(batch,))]}
 
     @contextlib.contextmanager
     def session(self, batch):
         with self.lease():
             with self.tx():
+                self.validate_state()
                 self._session_digest = self.plan(batch)[0]['digest']
                 if self.db.execute("SELECT 1 FROM items WHERE status='running'").fetchone():
                     self.db.execute("UPDATE items SET status='unknown',reason='previous_session_lost' WHERE status='running'")
+                    self.db.execute("UPDATE effects SET status='uncertain' WHERE status='intent' AND run IN (SELECT id FROM runs WHERE status='running')")
                     self.db.execute("UPDATE runs SET status='unknown' WHERE status='running'")
                     self.halt('reconciliation_required')
             self._session_batch = batch
@@ -249,33 +300,45 @@ class Controller:
                 self._session_batch = None
                 self._session_digest = None
                 with self.tx():
-                    if self.db.execute("SELECT 1 FROM items WHERE batch=? AND status='running'",(batch,)).fetchone():
-                        self.db.execute("UPDATE items SET status='unknown',reason='session_closed_without_terminal_evidence' WHERE batch=? AND status='running'",(batch,))
-                        self.db.execute("UPDATE runs SET status='unknown' WHERE batch=? AND status='running'",(batch,))
-                        self.halt('reconciliation_required')
+                    try:self.plan(batch)
+                    except (Blocked,ValueError,TypeError,KeyError):self.halt('invalid_state_preserved')
+                    else:
+                        if self.db.execute("SELECT 1 FROM items WHERE batch=? AND status='running'",(batch,)).fetchone():
+                            self.db.execute("UPDATE items SET status='unknown',reason='session_closed_without_terminal_evidence' WHERE batch=? AND status='running'",(batch,))
+                            self.db.execute("UPDATE effects SET status='uncertain' WHERE status='intent' AND run IN (SELECT id FROM runs WHERE batch=? AND status='running')",(batch,))
+                            self.db.execute("UPDATE runs SET status='unknown' WHERE batch=? AND status='running'",(batch,))
+                            self.halt('reconciliation_required')
 
     def command(self, batch, req):
         require(self._session_batch == batch, 'execution_session_required')
-        require(type(req) is dict and req.get('action') in ['next','claim','checkpoint','finish','halt'], 'invalid_action')
-        extra = {'next':'','claim':'preflight','checkpoint':'runId taskId phase evidenceRef','finish':'runId taskId outcome evidenceRef record','halt':'reason'}[req['action']]
+        require(type(req) is dict and req.get('action') in ['next','claim','checkpoint','intent','settle','finish','halt'], 'invalid_action')
+        extra = {'next':'','claim':'preflight','checkpoint':'runId taskId phase evidenceRef','intent':'runId taskId phase evidenceRef effectId inputDigest','settle':'runId taskId effectId outcome evidenceRef resultDigest','finish':'runId taskId outcome evidenceRef record','halt':'reason'}[req['action']]
         exact(req, 'action operationId ' + extra)
         op = req.get('operationId')
         require(type(op) is str and re.fullmatch(r'[A-Za-z0-9._:-]{1,128}',op), 'stable_operation_id_required')
         fingerprint = digest({'batch':batch,'request':req})
         with self.tx():
-            prior = self.db.execute('SELECT * FROM operations WHERE id=?',(op,)).fetchone()
+            row,_=self.plan(batch)
+            if req['action'] in ['next','claim','checkpoint','intent'] and not row['enabled'] and not self.db.execute("SELECT 1 FROM items WHERE batch=? AND status='running'",(batch,)).fetchone():
+                return {'allowed':False,'reason':'batch_inactive'}
+            prior = self.db.execute('SELECT * FROM operations WHERE batch=? AND id=?',(batch,op)).fetchone()
             if prior:
                 require(prior['digest'] == fingerprint, 'operation_id_conflict')
                 result = strict_json(prior['response'])
+                if req['action']=='intent':
+                    effect=self.db.execute('SELECT status FROM effects WHERE run=? AND id=?',(req['runId'],req['effectId'])).fetchone()
+                    return {'allowed':False,'executeOnce':False,'reason':'existing_intent_requires_verification','effectState':effect[0] if effect else 'missing'}
                 if req['action'] in ['next','claim','checkpoint'] and result.get('allowed'):
                     reason = self.guard(batch,new=req['action'] in ['next','claim'])
                     rid = req.get('runId') or result.get('runId')
                     if rid and not self.db.execute("SELECT 1 FROM runs WHERE id=? AND status='running'",(rid,)).fetchone():
                         reason = reason or 'run_terminal'
+                    if req['action']=='checkpoint' and rid and self.db.execute("SELECT 1 FROM effects WHERE run=? AND status IN ('intent','uncertain')",(rid,)).fetchone():
+                        reason=reason or 'prior_effect_unsettled'
                     if reason:return {'allowed':False,'reason':reason,'historicalOperation':True}
                 return result
             result = self._command(batch, req)
-            self.db.execute('INSERT INTO operations VALUES (?,?,?)',(op,fingerprint,encoded(result)))
+            self.db.execute('INSERT INTO operations VALUES (?,?,?,?)',(batch,op,fingerprint,encoded(result)))
             return result
 
     def _command(self, batch, req):
@@ -284,6 +347,8 @@ class Controller:
         if action=='halt':
             require(req.get('reason') in ['identity','permission','environment','occupancy_unknown','suspected_leak','unknown_result','platform_error'], 'invalid_halt_reason')
             self.halt(req['reason']);return {'halted':True}
+        if not row['enabled'] and not self.db.execute("SELECT 1 FROM items WHERE batch=? AND status='running'",(batch,)).fetchone():
+            return {'allowed':False,'reason':'batch_inactive'}
         if action in ['next','claim']:
             reason=self.guard(batch,new=True)
             if reason:return {'allowed':False,'reason':reason}
@@ -293,6 +358,7 @@ class Controller:
             if count>=p['maxIssues']:return {'allowed':False,'reason':'quantity_reached'}
             item=self.db.execute("SELECT * FROM items WHERE batch=? AND status='pending' ORDER BY position LIMIT 1",(batch,)).fetchone()
             if not item:return {'allowed':False,'reason':'exhausted'}
+            require(item['issue'] in p['issues'] and p['issues'][item['position']]==item['issue'], 'item_outside_immutable_plan')
             if action=='next':return {'allowed':True,'repository':p['repository'],'issue':item['issue'],'planDigest':row['digest']}
             f=req.get('preflight')
             exact(f,'repository issue taskId adopted acceptanceReady occupancy identityVerified permissionsVerified environmentVerified leakSuspected evidenceRef')
@@ -309,7 +375,7 @@ class Controller:
             return {'allowed':True,'runId':rid,'taskId':f['taskId'],'deliveryId':delivery,'planDigest':row['digest'],'scope':p['scope']}
         run=self.db.execute('SELECT * FROM runs WHERE id=? AND batch=?',(req.get('runId'),batch)).fetchone()
         require(run is not None and run['task']==req.get('taskId') and run['status']=='running', 'run_identity_or_terminal_state')
-        if action=='checkpoint':
+        if action in ['checkpoint','intent']:
             phase=req.get('phase')
             require(phase in ['modify','test','commit','push','pr','record'], 'unsupported_phase')
             reason=self.guard(batch)
@@ -318,14 +384,67 @@ class Controller:
             # Host must supply actual test/commit/PR evidence. A bool is never proof of it.
             if phase in ['commit','push','pr','record']:
                 require(text(req.get('evidenceRef')), 'phase_evidence_required')
+            if action=='intent':return self.create_intent(run,req,row['digest'])
+            if self.db.execute("SELECT 1 FROM effects WHERE run=? AND status IN ('intent','uncertain')",(run['id'],)).fetchone():
+                return {'allowed':False,'reason':'prior_effect_unsettled'}
             self.db.execute('UPDATE runs SET phase=? WHERE id=?',(phase,run['id']))
-            return {'allowed':True,'phase':phase,'planDigest':row['digest']}
+            return {'allowed':True,'phase':phase,'planDigest':row['digest'],'externalEffectIdempotencyProven':False}
+        if action=='settle':return self.settle_effect(run,req)
         return self.terminal(run, req)
+
+    def create_intent(self,run,req,plan_digest):
+        eid=req.get('effectId');input_digest=req.get('inputDigest')
+        require(type(eid) is str and re.fullmatch(r'[A-Za-z0-9._:-]{1,128}',eid) and type(input_digest) is str and re.fullmatch('[0-9a-f]{64}',input_digest), 'effect_identity_and_digest_required')
+        existing=self.db.execute('SELECT * FROM effects WHERE run=? AND id=?',(run['id'],eid)).fetchone()
+        if existing:
+            require(existing['input_digest']==input_digest and existing['phase']==req['phase'], 'effect_identity_conflict')
+            return {'allowed':False,'executeOnce':False,'reason':'existing_intent_requires_verification','effectState':existing['status']}
+        same=self.db.execute('SELECT id,status FROM effects WHERE run=? AND phase=? AND input_digest=?',(run['id'],req['phase'],input_digest)).fetchone()
+        if same:return {'allowed':False,'executeOnce':False,'effectId':same['id'],'reason':'existing_input_requires_verification','effectState':same['status']}
+        if self.db.execute("SELECT 1 FROM effects WHERE run=? AND status IN ('intent','uncertain')",(run['id'],)).fetchone():
+            return {'allowed':False,'reason':'prior_effect_unsettled','executeOnce':False}
+        self.db.execute("INSERT INTO effects VALUES (?,?,?,?,?,?,NULL)",(run['id'],eid,req['phase'],input_digest,'intent',req['evidenceRef']))
+        self.db.execute('UPDATE runs SET phase=? WHERE id=?',(req['phase'],run['id']))
+        return {'allowed':True,'executeOnce':True,'effectId':eid,'runId':run['id'],'planDigest':plan_digest}
+
+    def settle_effect(self,run,req):
+        outcome=req.get('outcome');result=req.get('resultDigest')
+        require(type(req.get('effectId')) is str and re.fullmatch(r'[A-Za-z0-9._:-]{1,128}',req['effectId']), 'effect_identity_required')
+        require(outcome in ['confirmed','not_applied','uncertain'] and text(req.get('evidenceRef')), 'effect_result_evidence_required')
+        require((type(result) is str and re.fullmatch('[0-9a-f]{64}',result)) if outcome=='confirmed' else result is None, 'effect_result_digest')
+        e=self.db.execute('SELECT * FROM effects WHERE run=? AND id=?',(run['id'],req.get('effectId'))).fetchone()
+        require(e is not None, 'unknown_effect')
+        if e['status'] in ['confirmed','not_applied']:
+            require(e['status']==outcome and e['result_digest']==result and e['evidence_ref']==req['evidenceRef'], 'effect_result_conflict')
+            return {'recorded':True,'effectState':e['status'],'executeOnce':False}
+        self.db.execute('UPDATE effects SET status=?,evidence_ref=?,result_digest=? WHERE run=? AND id=?',(outcome,req['evidenceRef'],result,run['id'],e['id']))
+        if outcome=='uncertain':
+            self.db.execute("UPDATE items SET status='unknown',reason='uncertain_effect',record=NULL WHERE run=?",(run['id'],))
+            self.db.execute("UPDATE runs SET status='unknown' WHERE id=?",(run['id'],))
+            self.db.execute("UPDATE effects SET status='uncertain' WHERE run=? AND status='intent'",(run['id'],))
+            self.halt('unknown_result')
+        return {'recorded':True,'effectState':outcome,'executeOnce':False}
+
+    def reconcile_effect(self,proof):
+        require(proof.get('verifiedIdle') is True and text(proof.get('evidenceRef')), 'actual_host_idle_and_reconciliation_evidence_required')
+        with self.lease(),self.tx():
+            self.validate_state()
+            run=self.db.execute('SELECT * FROM runs WHERE id=?',(proof.get('runId'),)).fetchone()
+            require(run is not None and run['task']==proof.get('taskId') and run['status'] in ['running','unknown'], 'reconcile_original_task_required')
+            require(proof.get('outcome') in ['confirmed','not_applied'], 'known_effect_result_required')
+            self.db.execute("UPDATE effects SET status='uncertain' WHERE run=? AND status='intent'",(run['id'],))
+            self.db.execute("UPDATE items SET status='unknown',reason='effect_reconciliation_required' WHERE run=?",(run['id'],))
+            self.db.execute("UPDATE runs SET status='unknown' WHERE id=?",(run['id'],))
+            result=self.settle_effect(run,proof)
+            self.halt('reconciliation_required')
+            return dict(result,enabled=False)
 
     def terminal(self, run, req):
         outcome=req.get('outcome')
         require(outcome in ['pr_ready','blocked','test_failed','stopped','unknown'] and text(req.get('evidenceRef')), 'terminal_evidence_required')
         record=req.get('record')
+        if outcome!='unknown':
+            require(not self.db.execute("SELECT 1 FROM effects WHERE run=? AND status IN ('intent','uncertain')",(run['id'],)).fetchone(), 'unsettled_effect_requires_reconciliation')
         if outcome=='pr_ready':
             validate_delivery(record)
             _,p=self.plan(run['batch'])
@@ -334,12 +453,15 @@ class Controller:
             require(record is None, 'unexpected_terminal_record')
         self.db.execute('UPDATE items SET status=?,reason=?,evidence_ref=?,record=? WHERE run=?',(outcome,outcome,req['evidenceRef'],encoded(record) if record else None,run['id']))
         self.db.execute('UPDATE runs SET status=? WHERE id=?',(outcome,run['id']))
-        if outcome=='unknown':self.halt('unknown_result')
+        if outcome=='unknown':
+            self.db.execute("UPDATE effects SET status='uncertain' WHERE run=? AND status='intent'",(run['id'],))
+            self.halt('unknown_result')
         return {'recorded':True,'outcome':outcome,'runId':run['id'],'deliveryId':run['delivery'],'externalNotificationSent':False}
 
     def reconcile(self, run_id, task_id, evidence_ref, verified_idle, outcome, record=None):
         require(verified_idle is True and text(evidence_ref), 'actual_host_idle_and_reconciliation_evidence_required')
         with self.lease(), self.tx():
+            self.validate_state()
             run=self.db.execute('SELECT * FROM runs WHERE id=?',(run_id,)).fetchone()
             require(run is not None and run['task']==task_id and run['status'] in ['running','unknown'], 'reconcile_original_task_required')
             require(outcome in ['pr_ready','blocked','test_failed','stopped'], 'no_automatic_retry_or_unknown_release')
@@ -366,6 +488,7 @@ def main():
         cmd=sub.add_parser(name);cmd.add_argument('batch')
     enable=sub.add_parser('enable');enable.add_argument('batch');enable.add_argument('--plan-digest',required=True);enable.add_argument('--approval-ref',required=True);enable.add_argument('--verified-idle',action='store_true')
     recover=sub.add_parser('reconcile');recover.add_argument('evidence')
+    effect_recover=sub.add_parser('reconcile-effect');effect_recover.add_argument('evidence')
     a=parser.parse_args();c=None
     try:
         if a.action=='init':Controller.initialize(a.state);result={'initialized':True,'enabled':False}
@@ -378,6 +501,9 @@ def main():
             elif a.action=='reconcile':
                 p=read_json(a.evidence);exact(p,'runId taskId evidenceRef verifiedIdle outcome record')
                 result=c.reconcile(p['runId'],p['taskId'],p['evidenceRef'],p['verifiedIdle'],p['outcome'],p['record'])
+            elif a.action=='reconcile-effect':
+                p=read_json(a.evidence);exact(p,'runId taskId effectId evidenceRef verifiedIdle outcome resultDigest')
+                result=c.reconcile_effect(p)
             else:
                 with c.session(a.batch) as command:
                     print(encoded({'session':'ready','cooperativeOnly':True}),flush=True)
