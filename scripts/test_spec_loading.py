@@ -157,6 +157,22 @@ def main():
                  lambda s=scenario, paths=listed: paths == set(manifest['scenarios'][s]), True)
         cache = load(area, metadata, 'intake')
         test('same_sha_full_cache', lambda: load(area, metadata, 'intake', cache)['load_result'], 'success')
+        test('intake_loads_binding_only', lambda:
+             manifest['scenarios']['intake'].get('docs/MANUAL_DELIVERY.md'), ['先绑定真实来源'])
+        test('intake_excludes_execution_route', lambda:
+             not {'AGENTS.md', 'docs/WORKFLOW.md'} & set(validate_manifest(manifest, 'intake')), True)
+        binding_text = cache['contents']['docs/MANUAL_DELIVERY.md'].decode().split('## 先绑定真实来源\n', 1)[1].split('\n## ', 1)[0]
+        test('intake_binding_ack_and_failure_contract', lambda:
+             all(term in binding_text for term in ['request 到期前', '[wecom:source-bind]',
+                 'source_bound |', '失败或未知', '不能声称可跨天回执', 'source-binding-status',
+                 'binding_active=1', '真实 bridge App']), True)
+        workflow = load(area, metadata, 'delivery')['contents']['docs/WORKFLOW.md'].decode()
+        manual_entry = workflow.split('## 本人直接 Codex 手动入口\n', 1)[1].split('\n## ', 1)[0]
+        test('direct_manual_entry_requires_host_identity_scope', lambda:
+             all(term in manual_entry for term in ['本地执行宿主', '本人身份/权限可核验', '完整范围',
+                 '无须迁回 dots 重新批准', 'Issue/PR 评论', 'dots 不能替外部会话',
+                 '仅消费 GitHub 交付证据', '不开启自动开发']), True)
+
         for field, value in [('sha', ''), ('private', False), ('repo', 'other/spec'), ('default_branch', ''), ('evidence', '')]:
             test('metadata_' + field, lambda f=field, v=value: load(area, dict(metadata, **{f: v}), 'intake'), blocked=True)
         for fault in ['denied', 'read_failed', 'truncated', 'wrong_sha']:

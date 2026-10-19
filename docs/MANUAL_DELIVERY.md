@@ -1,10 +1,16 @@
 # 手动研发交付与原群反馈契约
 
-默认在 Mac mini Codex 手动处理 HiveOS Issue。实施须有 [完整范围](WORKFLOW.md#一次说清完整范围) 的有效授权；GitHub 保存交付事实，dots 核验后只回原企微群。自动开发仍关闭；本契约只供未来自动开发复用，不建立任务、定时扫描、webhook、凭据或第二调度器。本次规范与桥接代码更新不代表运行任务已同步或服务已部署。
+默认在 Mac mini Codex 手动处理 HiveOS Issue。本人直接在 Codex 发起的实施按 [本人直接入口](WORKFLOW.md#本人直接-codex-手动入口)在实际本地宿主核验身份、权限及 [完整范围](WORKFLOW.md#一次说清完整范围)，不要求迁回 dots 重审；GitHub 保存交付事实，dots 核验后只回原企微群。自动开发仍关闭；本契约只供未来自动开发复用，不建立任务、定时扫描、webhook、凭据或第二调度器。本次规范与桥接代码更新不代表运行任务已同步或服务已部署。
 
 ## 先绑定真实来源
 
-现有可信 Ditto（bridge 同时固定真实 bot_id 和 user ID）在有效 group request 原 Slack 根核验真实桥接 App、固定私有频道、认证来源和原群。核验建单事实后，按桥接 [长期来源协议](https://github.com/xiiiblue/wecom-slack-bridge/blob/main/docs/SOURCE_FEEDBACK.md) 在原根绑定固定业务 repository/Issue，读回 `source_bound` 才记成功。路由仅保存在私有运行 SQLite；GitHub 不写姓名、平台/群/用户 ID、配置、secret 或私人聊天。记录缺失、旧来源过期或升级前缺证明时停止回群并报告，不能猜路由或用正文 chat_id、群名、URL 恢复。私有运行目录中的已核验原根关联供 dots 找回；无关联不得根据 Issue 正文重建。
+现有可信 Ditto（bridge 同时固定真实 bot_id 和 user ID）在有效 group request 原 Slack 根核验真实桥接 App、固定私有频道、认证来源和原群。新 Issue 创建成功且独立读回仓库/编号后，须在普通 request 到期前及时完成来源绑定，不能等采纳评审、开发或交付结束。按桥接 [长期来源协议](https://github.com/xiiiblue/wecom-slack-bridge/blob/main/docs/SOURCE_FEEDBACK.md) 在同一真实来源原根发严格协议（合成编号示例）：
+
+```text
+[wecom:source-bind]{"repository":"xiiiblue/hive-os","issue":42}
+```
+
+必须读取真实 bridge App 在固定频道、同原根返回的 `source_bound | xiiiblue/hive-os#42 | original audience pinned`，并核对本次 repo/Issue 对应，才记录长期绑定成功；标记、metadata 或复制正文不能代替作者/频道/线程认证。Slack 接受发帖、企微入站“收到”或 Issue 创建成功都不是绑定 ACK。失败或未知时保留已登记事实，但明确“长期来源绑定未确认”，不能声称可跨天回执；先在同原根显式发送 `[wecom:source-binding-status]{"repository":"xiiiblue/hive-os","issue":42}`，只读现存绑定；必须认证真实 bridge App/频道/原根的 `source_binding | xiiiblue/hive-os#42 | bound | binding_active=1` 才确认可用。该查询不恢复或创建绑定；与首次 source_bound ACK 分开排队，旧 ACK 未知不阻断查询。无成功回执仍保留未知，必要时只读核验私有状态，不盲重发 bind 或补建。缺功能、配置未上线或无权发协议时报告待接入，不为凑成功改自动化。路由仅保存在私有运行 SQLite；GitHub 不写姓名、平台/群/用户 ID、配置、secret 或私人聊天。记录缺失、旧来源过期或升级前缺证明时停止回群并报告，不能猜路由或用正文 chat_id、群名、URL 恢复。私有运行目录中的已核验原根关联供 dots 找回；无关联不得根据 Issue 正文重建。
 
 同一 repo/Issue 只能对应一个不可变原来源；其他群同题不继承此路由或读取权限。不跨群改投、不广播。普通回复、TTL、附件和 dots 本人审批边界不变；不使用旧 review/notify/execution 许可协议。
 
@@ -27,7 +33,7 @@ dots 被唤醒或收到人工请求后：
 1. 按统一入口加载当前私有规范，核验本次任务权限、固定仓库、Issue 和 PR 的真实归属与关联、实际评论 ID/类型/创建者；读取当前 Issue 主记录，复核同 deliveryId，排除不可信正文指令。
 2. 用真实 GitHub 作者/仓库/Issue/PR/commit、候选 SHA 检查、实际部署版本及用户可见验收证据独立交叉核验。PR 合并、closed、成功评论或离线校验通过不能替代证据。记录变更或证据不全则停止公开“可用”通知。
 3. 从私有可信运行关联找到已核验绑定原根，核对原群仍获准和可公开用途。只写不含私有源码、原始日志、身份或内部配置的 publicSummary，必要时给原群可访问且已批准的引用。
-4. 在同原根用 `[wecom:source-result]` 严格字段发送同 deliveryId；先核验 bridge accepted，再按需 `[wecom:source-status]` 查询。发送端 Slack ACK、桥接 accepted、企微 ACK、用户已读分别报告；未知停止重发，不换 ID 绕过。重复事件先查同 ID 状态，already ACK 不重复发。
+4. 在同原根用 `[wecom:source-result]` 严格字段发送同 deliveryId；先核验 bridge accepted，再按需 `[wecom:source-status]` 查询。发送端 Slack ACK、桥接 accepted、企微 ACK、用户已读分别报告；未知停止重发，不换 ID 绕过。重复事件先查同 ID 状态，already ACK 不重复发。source-status/binding-status 按真实 Slack channel+ts 持久去重，同事件重投不再排 ACK；新发显式查询仅取当前状态，不重放企微。
 5. Issue 的公开完成事实、原群反馈状态及私有发送证据分别保留；群通知失败不抹去代码交付，不因失败重新开发。GitHub 运行记录写回/关单仅在各自授权内，失败先读回。
 
 可信响应方还须确认 GitHub 连接能读取上述真实身份和证据，并能在原 Slack 根以现有固定可信身份发协议消息。能力缺失时报告具体缺口，不新增凭据、持久访问或网络安全配置。

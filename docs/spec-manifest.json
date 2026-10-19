@@ -9,6 +9,7 @@
   "scenarios": {
     "intake": {
       "docs/GROUP_INTAKE.md": ["*"],
+      "docs/MANUAL_DELIVERY.md": ["先绑定真实来源"],
       "docs/ITEM_LIFECYCLE.md": ["哪个入口可以写"],
       "docs/ADAPTERS.md": ["规则与技术保障", "环境查询与部署边界"],
       "docs/SOURCE_SNAPSHOTS.md": ["代码调查与只读检索顺序"]
