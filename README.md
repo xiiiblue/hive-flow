@@ -59,6 +59,6 @@ python3 scripts/check_docs.py
 
 **许可证尚未选定，仓库没有 LICENSE 文件。** 发布为开源项目前须由负责人决定许可及贡献授权方式，本仓库不预设该决定。敏感信息处理见 [安全说明](SECURITY.md)。
 
-手动研发交付、PR 完成评论唤醒与跨天原群回传见 [手动交付契约](docs/MANUAL_DELIVERY.md)。默认 Mac mini Codex 手动处理，自动开发保持关闭。
+手动研发交付及 [默认 HTTP 收尾](docs/MANUAL_DELIVERY.md#默认交付收尾)由 hive-flow 统一维护：先识别现有可信绑定，实际交付/验收完成后自动生成必要脱敏回执；无绑定正常结束注明，不扩大合并部署等当次权限。默认 Mac mini Codex 手动处理，自动开发保持关闭。
 
 后续自动研发采用 [Codex 桌面原生 Automations](docs/AUTOMATION_DESIGN.md)：指定本地 HiveOS 项目、原生 worktree、任务指令及 ACTIVE/PAUSED；不自建 CLI 调度或批次控制层。本人已在本地创建 PAUSED 配置；业务范围、期限、数量和启用未获完整配置/授权，实际 prompt 与运行历史尚待原生核验；互斥、停止和去重按实测或流程约束说明，不构成硬隔离保证。

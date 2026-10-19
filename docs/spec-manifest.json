@@ -21,6 +21,7 @@
     "delivery": {
       "AGENTS.md": ["*"],
       "docs/MANUAL_DELIVERY.md": ["*"],
+      "docs/DIRECT_RECEIPTS.md": ["*"],
       "docs/WORKFLOW.md": ["*"],
       "docs/ITEM_LIFECYCLE.md": ["可照做的收尾顺序"],
       "docs/ADAPTERS.md": ["开发任务的阶段衔接", "环境查询与部署边界"],
