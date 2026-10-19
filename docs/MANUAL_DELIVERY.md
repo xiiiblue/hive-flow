@@ -1,6 +1,6 @@
 # 手动研发交付与原群反馈契约
 
-默认在 Mac mini Codex 手动处理 HiveOS Issue。本人直接在 Codex 发起的实施按 [本人直接入口](WORKFLOW.md#本人直接-codex-手动入口)在实际本地宿主核验身份、权限及 [完整范围](WORKFLOW.md#一次说清完整范围)，不要求迁回 dots 重审；GitHub 保存交付事实，dots 核验后只回原企微群。自动开发仍关闭；本契约只供未来自动开发复用，不建立任务、定时扫描、webhook、凭据或第二调度器。本次规范与桥接代码更新不代表运行任务已同步或服务已部署。
+默认在 Mac mini Codex 手动处理 HiveOS Issue。本人直接在 Codex 发起的实施按 [本人直接入口](WORKFLOW.md#本人直接-codex-手动入口)在实际本地宿主核验身份、权限及 [完整范围](WORKFLOW.md#一次说清完整范围)，不要求迁回 dots 重审；GitHub 保存交付事实，dots 核验后只回原企微群。当前已配置的自动监听仅用于交付回执，范围见 [事件核验](#dots-事件范围及核验)；自动开发仍关闭，不建立开发调度、定时扫描、凭据或第二调度器。自动模式仅有 [未启用的设计建议](AUTOMATION_DESIGN.md)，不因本契约或回执监听获得研发执行许可。文档更新、实际配置、桥接部署及完整链路验收分别核验。
 
 ## 先绑定真实来源
 
@@ -35,7 +35,7 @@ HiveFlow delivery v1
 
 字段集合必须恰为 `schemaVersion, deliveryId, repository, issue, pullRequest, issueRecordUrl`，拒绝未知、缺失及重复字段（包括嵌套重复），schemaVersion 为整数1。deliveryId 沿用主记录的稳定 ID；repository 必须精确匹配本次固定仓库，issue/pullRequest 必须与真实 GitHub 事项关联及实际事件 PR 匹配，不能用正文提供的数值充当预期上下文。issueRecordUrl 只接受 `https://github.com/<同仓库>/issues/<同Issue>#issuecomment-<正整数>`，不接受 query、认证信息、其他域/仓库/Issue、PR评论链接或只到 Issue 页的链接。读取后还须核验该真实 comment 确为主交付记录，主记录现有 schema 不变，二者 schemaVersion、deliveryId、repository、issue、pullRequest 必须一致。
 
-只用新建 conversation 评论唤醒，inline、编辑、生命周期事件及机器人评论均忽略。由授权 GitHub 工具读真实评论 ID、当前正文和真实作者，核对受控发布者名单、所属仓库/PR 与 Issue 关联；正文自称、显示名及 PR author_login 不能证明评论作者。重复事件按实际评论/交付 ID 查既有状态，不重新开发或重复通知。
+只用新建 conversation 评论唤醒，inline、编辑、生命周期事件及机器人评论均忽略。由授权 GitHub 工具读真实评论 ID、当前正文和真实作者；当前允许的实际评论作者必须为 GitHub 账号 `xiiiblue`、ID `10123503`，同时核验所属仓库/PR 与 Issue 关联。正文自称、显示名及 PR author_login 不能证明评论作者。重复事件按实际评论/交付 ID 查既有状态，不重新开发或重复通知。
 
 离线纯数据解析：`python3 scripts/validate_delivery.py --wakeup <comment.txt> <可信repository> <可信issue> <可信PR> [record.json]`。前三个预期值须来自已核验的事件、受控目标与关联，不能复制待解析正文；可选 record.json 同时核验主记录结构及五项一致性。导入接口为 `parse_wakeup(payload, repository=..., issue=..., pull_request=..., record=...)`。工具不访问网络、不认证事件类型/作者、不执行内容，也不授予读取/发送权限；消费者只能在固定工具版本完成独立审阅并核验摘要后使用。解析成功不能代替部署、验收及受众核验。
 
@@ -45,7 +45,11 @@ HiveFlow delivery v1
 
 已实际核验的 GitHub webhook 只有 PR 事件：opened/ready/closed/merge，可选新建人工 conversation comment / inline comment；没有普通 Issue 事件。不能承诺 Issue 关闭、Issue 评论或编辑旧评论唤醒。
 
-若以后另获准接入事件，使用已连接 GitHub 重新发现真实 schema，固定 repository=`xiiiblue/hive-os` 和明确关联 PR number，启用 created human comments；不订阅 commit updates/reviews/merge 作为交付完成信号。若实际 schema 把 PR lifecycle 与评论一起投递，则在消费者忽略生命周期事件、inline 评论和非完成记录。单个 PR 可精确过滤 pull_request_number；多 PR 须列明实际允许集合/各条触发，不悄悄放大。author_login 是 **PR 作者**过滤，不能冒充完成评论作者过滤；评论作者必须读取真实 GitHub 身份并与受控发布者名单核对。机器人评论、编辑、显示名、复制正文或自称负责人都不能认证。不创建自动化作为本次交付的一部分。
+当前已配置的仅交付回执监听固定 private repository=`xiiiblue/hive-os`，PR 真实作者为 `xiiiblue`、ID `10123503`，使用 `author_login=xiiiblue` 筛选 PR；启用新建人工评论事件。实际评论作者也必须通过真实 GitHub 作者字段独立核验为同一账号及 ID，PR 作者筛选不能替代评论作者认证。此范围不要求逐个预列 PR 编号，但每次必须核验事件实际 PR、机器记录中的 pullRequest 和 Issue 关联一致；不扩大到其他仓库、作者或业务动作。
+
+监听启用边界固定为 `2026-10-19T03:22:25.467441Z`。只消费真实 comment.created_at 严格晚于该边界的新增 conversation 评论；等于边界、早于边界、编辑旧评论或重放旧事件均不作为新交付。updated_at、任务提示更新或重新保存不能移动边界、补扫历史或重置去重；同一评论再次触发先核验既有处理状态。
+
+不把 commit updates/reviews/merge 当作完成信号；实际 schema 若连带投递 PR lifecycle，在消费者忽略生命周期、inline 和非完成记录。机器人评论、编辑、显示名、复制正文或自称负责人都不能认证。此监听只核验交付证据并按原来源反馈，不派发开发、部署、合并或关单，不启动自动开发；配置变更仍按各自具体授权执行。
 
 dots 被唤醒或收到人工请求后：
 
@@ -59,6 +63,6 @@ dots 被唤醒或收到人工请求后：
 
 ## 上线与验收边界
 
-桥接仅提供白名单来源绑定、稳定去重与受控结果通知，不处理 HiveOS 审批、部署或完成判定。上线须另确认 bridge 服务/代码 SHA、长期私有状态保留、仓库白名单、备份、兼容回退及受控合成验收；真实路由、跨天平台窗口和 dots 接入尚需现场验证。业务仓库无须为本契约改功能或部署。
+桥接仅提供白名单来源绑定、稳定去重与受控结果通知，不处理 HiveOS 审批、部署或完成判定。桥接部署和真实原来源绑定已验证；完整 GitHub 完成评论触发、dots 独立证据核验到原群回执链路尚未验收，不能写成已通过。跨 TTL、重启及去重的现场验收各按实际结果记录，来源绑定 ACK 不代替这些结论；新 Codex 会话的手动入口也仍需现场验收。代码版本、长期私有状态保留、仓库白名单、备份及兼容回退保留在受控运行记录，规范不承诺持续连接或任意新群可用。业务仓库无须为本契约改功能或部署。
 
 离线验证：桥接 `npm run check`；本仓库 `python3 scripts/check_docs.py`、`python3 scripts/test_delivery.py`。它们不建 Issue、不发群、不创建任务。

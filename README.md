@@ -60,3 +60,5 @@ python3 scripts/check_docs.py
 **许可证尚未选定，仓库没有 LICENSE 文件。** 发布为开源项目前须由负责人决定许可及贡献授权方式，本仓库不预设该决定。敏感信息处理见 [安全说明](SECURITY.md)。
 
 手动研发交付、PR 完成评论唤醒与跨天原群回传见 [手动交付契约](docs/MANUAL_DELIVERY.md)。默认 Mac mini Codex 手动处理，自动开发保持关闭。
+
+[有限批次自动模式](docs/AUTOMATION_DESIGN.md)仅为尚未实现、未启用的设计建议；不属于现行执行授权或自动任务配置。
