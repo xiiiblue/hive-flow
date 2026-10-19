@@ -26,7 +26,8 @@ HiveFlow is an agent collaboration specification, not a deployable service. The 
 |第一次安装理解与离线演练|[快速开始](docs/QUICKSTART.md)|
 |记录采纳/拒绝/暂缓与交付收尾|[事项状态与结项](docs/ITEM_LIFECYCLE.md)|
 |在企微群提问、报 Bug、提需求|[用户使用指南](docs/USER_GUIDE.md)|
-|了解角色、授权和交付|[核心流程](docs/WORKFLOW.md)|
+|了解角色、授权、审阅/完整交付两种终点|[核心流程](docs/WORKFLOW.md#交付模式)|
+|准备两种原生定时任务及采纳选单|[自动化模板](docs/AUTOMATION_DESIGN.md#两种可复制原生任务模板)，规范与离线辅助，未启用|
 |处理群咨询、Bug 或需求|[群入口](docs/GROUP_INTAKE.md)|
 |在已授权范围内缓存与静态查询代码|[云端过滤源码快照](docs/SOURCE_SNAPSHOTS.md)|
 |把规范映射到现有工具|[工具适配](docs/ADAPTERS.md)|
@@ -39,6 +40,8 @@ HiveFlow is an agent collaboration specification, not a deployable service. The 
 ```sh
 python3 scripts/check_docs.py
 ```
+
+受控采纳的固定位置、dots 生产与 Codex 认领见[单槽契约](docs/ADOPTION_RECORDS.md)。本仓库不保存运行记录；当前控制分支/文件尚未创建。
 
 ## 当前采用的方式
 
