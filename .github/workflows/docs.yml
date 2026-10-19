@@ -16,4 +16,5 @@ jobs:
       - run: python3 -B scripts/test_spec_loading.py
       - run: python3 -B scripts/test_source_snapshot.py
       - run: python3 -B scripts/test_diagnostic_boundaries.py
+      - run: python3 -B scripts/test_adoption_record.py
       - run: git diff --check
