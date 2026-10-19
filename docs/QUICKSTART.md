@@ -42,7 +42,7 @@ python3 scripts/rehearse_offline.py --bridge-source ../wecom-slack-bridge --repo
 |准备项|由谁提供/核验|
 |---|---|
 |协调方|选择自己的 Dots 或其他获准宿主及可用模型；按 [适配说明](ADAPTERS.md)验证能力，不沿用维护者账户配置|
-|负责人决策入口|唯一可核验的本人受控通道；当前 Dots 适配为本人主对话，群不能授予实施权限|
+|负责人决策入口|dots 协调任务用 dots 本人主对话；本人直接 Mac mini 本地 Codex 用可信实际执行会话核验，不要求回 dots 重批已明确同范围；群不授予实施权限|
 |项目与 Issues|固定仓库、可见成员、允许新建/回写/关闭的具体范围；只读扫描与群入口不自动获得写权限|
 |工作沟通|管理员接入并授权的工作群、私有 Slack 频道、真实桥接与响应方身份；新群另核准|
 |独立桥接|自己的机器人与 App 配置；新安装不复用其他运行服务的 Bot ID，不创建竞争连接|
@@ -51,6 +51,8 @@ python3 scripts/rehearse_offline.py --bridge-source ../wecom-slack-bridge --repo
 桥接的 [配置指南](https://github.com/xiiiblue/wecom-slack-bridge/blob/main/docs/CONFIGURATION.md)、[消息协议](https://github.com/xiiiblue/wecom-slack-bridge/blob/main/docs/PROTOCOL.md)和[安装维护](https://github.com/xiiiblue/wecom-slack-bridge/blob/main/deploy/README.md)独立维护。新使用者须先核对固定发布提交再跟随对应文档，不以浮动 main 作为已验证部署版本。
 
 只有接入、受众、发送范围与启动均获准后，才在自己的环境安全填写配置并启动服务。凭据只在受控运行环境保存，不贴聊天或纳入规范；此演练既不申请权限，也不执行启动。真实检验须覆盖机器人消息及本人线程回复触发响应方、显式路由、错误来源、实际可见和真实往返。
+
+本人直接手动入口见 [核心流程](WORKFLOW.md#本人直接-codex-手动入口)。可明确说：“请处理 Issue #N（附准确仓库链接），范围包括修改、测试、提交、推送及创建 PR，完成后给我审阅。”目标和验收等缺项先核对；已明确的同范围不重复批准。裸“处理”不长期授权合并、部署、关单或台账，PR 待审不等于最终完成，见 [交付契约](MANUAL_DELIVERY.md#github-交付记录)。
 
 ## 5. 故障与升级回退
 
