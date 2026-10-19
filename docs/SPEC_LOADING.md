@@ -59,7 +59,7 @@
 
 ### 研发任务入口指引
 
-> 每次研发准备或获准实施前，以已有授权 GitHub 核验私有 `xiiiblue/hive-flow` 默认分支当前完整 SHA，固定该 SHA 读取 `docs/SPEC_ENTRY.md`、`docs/SPEC_LOADING.md`、`docs/spec-manifest.json` 及 delivery 最少章节，记录实际 SHA、路径、章节、完整性与读取结果；同 SHA 完整可信缓存须实际打开阅读。失败、未知、冲突或拒绝时停止依赖动作并报告。另核验业务仓库 AGENTS、实际基线、未知改动、唯一计划与本次授权；本人直接 Mac mini Codex 会话由实际执行宿主按 WORKFLOW 的窄入口核验本人/权限/范围，不迁回 dots 重审；Issue/PR 评论不是许可，dots 不代造外部授权；只推进已授权范围。采纳、旧许可、群反馈及规范更新不启动开发，自动开发关闭，部署、合并、关单和台账各按本次有效许可执行。
+> 每次研发准备或获准实施前，以已有授权 GitHub 核验私有 `xiiiblue/hive-flow` 默认分支当前完整 SHA，固定该 SHA 读取 `docs/SPEC_ENTRY.md`、`docs/SPEC_LOADING.md`、`docs/spec-manifest.json` 及 delivery 最少章节，记录实际 SHA、路径、章节、完整性与读取结果；同 SHA 完整可信缓存须实际打开阅读。失败、未知、冲突或拒绝时停止依赖动作并报告。另核验业务仓库 AGENTS、实际基线、未知改动、唯一计划与本次授权；本人直接 Mac mini Codex 会话由实际执行宿主按 WORKFLOW 的窄入口核验本人/权限/范围，不迁回 dots 重审；Issue/PR 评论不是许可，dots 不代造外部授权；只推进已授权范围。HiveOS Issue 按同 SHA 的 MANUAL_DELIVERY 默认收尾及 DIRECT_RECEIPTS 执行可信来源查询和完成后的必要脱敏 HTTP 回执；仅 PR 待审不报完成，无绑定正常结束注明，未知不重放/换路，不扩大业务或工具权限。采纳、旧许可、群反馈及规范更新不启动开发，自动开发关闭，部署、合并、关单和台账各按本次有效许可执行。
 
 ## 冷启动验证与验收范围
 
