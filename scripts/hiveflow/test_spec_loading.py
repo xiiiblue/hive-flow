@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def export_entry_path(link):
     path = link.split('#')[0]
     if '://' in path:
-        base = 'https://github.com/xiiiblue/hive-os/blob/a3e7c38a12b26c2b19a8a687c169c778e1bbe4f6/'
+        base = 'https://github.com/xiiiblue/hive-os/blob/51926b24b9607dc504c2f43cb23f933d5e407fad/'
         require(path.startswith(base), 'export link has different source')
         path = path[len(base):]
         require('..' not in PurePosixPath(path).parts, 'export link leaves source')

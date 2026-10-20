@@ -8,7 +8,7 @@
 
 HiveFlow是蜂巢的研发协作规范：接收反馈、调查事实、由负责人决定是否采纳，在明确授权内实施，最后按证据交付并反馈结果。它复用dots、GitHub、Codex和独立消息桥接，不提供新的业务服务或调度器。业务自动开发尚未启用；已有接入和验证范围见[接入与验收记录](HFL-019-接入与验收记录.md)。
 
-本目录是HiveOS现行规范的固定版本副本；唯一权威来源仍为HiveOS的`docs/06-自动化/`，本仓库不作为业务任务读取来源。[ACDL规范](https://github.com/xiiiblue/hive-os/blob/a3e7c38a12b26c2b19a8a687c169c778e1bbe4f6/docs/00-规范/README.md)负责工程协作；本目录负责反馈、授权衔接、自动化任务和交付回执。独立hive-flow仅作按需导出副本，不作为任务读取来源。[HiveFlow手册](../11-手册/05-自动化手册/README.md)以12章正文和3篇附录解释流程，作为网站内容的原始材料，不另设执行规则；网站取材与版本维护见[手册附录C](../11-手册/05-自动化手册/15-附录C：网站取材与内容维护.md)。
+本目录是HiveOS现行规范的固定版本副本；唯一权威来源仍为HiveOS的`docs/06-自动化/`，本仓库不作为业务任务读取来源。[ACDL规范](https://github.com/xiiiblue/hive-os/blob/51926b24b9607dc504c2f43cb23f933d5e407fad/docs/00-规范/README.md)负责工程协作；本目录负责反馈、授权衔接、自动化任务和交付回执。独立hive-flow仅作按需导出副本，不作为任务读取来源。[HiveFlow手册](../11-手册/05-自动化手册/README.md)以12章正文和3篇附录解释流程，作为网站内容的原始材料，不另设执行规则；网站取材与版本维护见[手册附录C](../11-手册/05-自动化手册/15-附录C：网站取材与内容维护.md)。
 
 内容依赖固定为**HiveFlow规范→HiveFlow介绍→HiveFlow网站**，维护顺序及各层责任见[HFL-016](HFL-016-文档维护规则.md#规范介绍与网站的依赖顺序)。Issue之后由MacMini承接研发，手动与定时都可选择PR待审或完整交付；唯一规则及Director介入次数见[HFL-003](HFL-003-协作流程与授权.md#issue交接与两种本地启动方式)。
 
@@ -71,4 +71,4 @@ python3 scripts/hiveflow/check_docs.py
 
 完整检查选择见[文档维护规则](HFL-016-文档维护规则.md)。文档检查和离线模拟不能证明真实平台接入、部署、用户收到或自动开发已经启用。
 
-[展示网站](https://www.bluexiii.com/flow/)由独立[flow仓库](https://github.com/xiiiblue/flow)维护审阅后的公开快照，不是运行服务，也不自动修改工作群或工具权限。独立[hive-flow仓库](https://github.com/xiiiblue/hive-flow)已按[Apache-2.0](https://github.com/xiiiblue/hive-flow/blob/main/LICENSE)公开规范参考版、介绍与离线工具；HiveOS主仓库仍为私有。公开范围、贡献方式及持续审阅要求见HFL-016和[安全与隐私规则](HFL-017-安全与隐私规则.md)。
+[展示网站](https://www.bluexiii.com/flow/)由独立[flow仓库](https://github.com/xiiiblue/flow)维护审阅后的公开快照，不是运行服务，也不自动修改工作群或工具权限。官网源码flow与独立项目hive-flow均已采用Apache-2.0，各仓库的LICENSE与NOTICE分别说明分发范围；[hive-flow仓库](https://github.com/xiiiblue/hive-flow)提供规范参考版、介绍与离线工具，HiveOS主仓库仍为私有。公开范围、贡献方式及持续审阅要求见HFL-016和[安全与隐私规则](HFL-017-安全与隐私规则.md)。
