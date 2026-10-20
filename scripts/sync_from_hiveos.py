@@ -124,6 +124,15 @@ def export_entry_path(link):
         assert old in text, '上游手册状态说明变化，需要重新审阅'
         text = text.replace(old, '网站按独立仓库的实际发布版本核验，本副本不代表网站实时状态。')
         changes.append('export-context')
+    if '51.8' in text:
+        text = text.replace('51.8', '示例开发环境')
+        changes.append('public-example-environment')
+    if name == 'docs/06-自动化/README.md':
+        text = text.replace('许可证尚未选定；公开、贡献授权及历史内容审阅见HFL-016和', '本公开副本采用根LICENSE中的Apache-2.0；贡献方式见根CONTRIBUTING.md，来源规则与历史审阅见HFL-016和')
+        changes.append('public-license-context')
+    if name == 'docs/06-自动化/HFL-016-文档维护规则.md':
+        text = text.replace('许可证和外部贡献授权方式尚未确定，正式开放前由负责人决定；公开可见或提交PR不自动产生许可。', '来源版本的许可决定属于HiveOS维护范围；本公开副本已按根LICENSE采用Apache-2.0，贡献方式见根CONTRIBUTING.md。')
+        changes.append('public-license-context')
     return text.encode('utf-8'), changes
 
 
@@ -151,7 +160,7 @@ def plan(source, commit):
         rows.append({'path': name, 'sourceSHA256': digest(raw), 'exportSHA256': digest(output), 'adaptations': changes})
     manifest = {'schemaVersion': 1, 'repository': REPOSITORY, 'commit': commit,
                 'exportedOn': datetime.date.today().isoformat(), 'includeRoots': list(PREFIXES),
-                'purpose': '私有学习与维护副本；真实任务仍从HiveOS加载；非开源发布或运行启用', 'files': rows}
+                'purpose': 'Apache-2.0公开参考版；来源实例的真实任务仍从HiveOS加载；不启用业务运行', 'files': rows}
     return files, manifest
 
 

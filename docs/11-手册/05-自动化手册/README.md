@@ -25,7 +25,7 @@ HiveFlow是一套让人和智能体共同完成这段工作的协作方法。它
 
 ## 2.与蜂巢、ACDL和网站的关系
 
-蜂巢是这套方法形成和实践的项目背景。ACDL负责需求、设计、实施、评审和版本的工程协作；HiveFlow负责反馈入口、采纳与授权的衔接、任务交付终点及原来源回执。需要了解工程方法时，可以并读[ACDL研发流程手册](https://github.com/xiiiblue/hive-os/blob/4d4f9090aeac6638c424c39d2abbed5ce6183979/docs/11-手册/02-研发流程手册/README.md)。
+蜂巢是这套方法形成和实践的项目背景。ACDL负责需求、设计、实施、评审和版本的工程协作；HiveFlow负责反馈入口、采纳与授权的衔接、任务交付终点及原来源回执。需要了解工程方法时，可以并读[ACDL研发流程手册](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/11-手册/02-研发流程手册/README.md)。
 
 HiveFlow的唯一权威执行规范在[自动化目录](../../06-自动化/README.md)。本手册将规则解释成连续教程和案例；独立[flow网站仓库](https://github.com/xiiiblue/flow)应以本手册为原始材料，整理[展示网站](https://www.bluexiii.com/flow/)的公开内容。
 
@@ -107,8 +107,8 @@ PR之后的介入，可以由Director自己操作，也可以在MacMini的可信
 
 ## 8.从理解转向执行
 
-Agent实际工作仍先读取目标仓库的`AGENTS.md`，再从[HFL-001：规范加载入口](../../06-自动化/HFL-001-规范加载入口.md)选择intake、review或delivery路线，核验真实仓库、完整版本和任务所需规则。工程规范从[ACDL规范入口](https://github.com/xiiiblue/hive-os/blob/4d4f9090aeac6638c424c39d2abbed5ce6183979/docs/00-规范/README.md)选择，不要求每项任务通读全部材料。
+Agent实际工作仍先读取目标仓库的`AGENTS.md`，再从[HFL-001：规范加载入口](../../06-自动化/HFL-001-规范加载入口.md)选择intake、review或delivery路线，核验真实仓库、完整版本和任务所需规则。工程规范从[ACDL规范入口](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/00-规范/README.md)选择，不要求每项任务通读全部材料。
 
 本手册依据同一HiveOS提交中的现行规范展开，章节末尾列出直接依据。规范与介绍同步维护；网站取材时记录包含两者同步修订的完整提交及采用章节，不从旧写作基线推断已经包含新规则。
 
-回到[全部手册](https://github.com/xiiiblue/hive-os/blob/4d4f9090aeac6638c424c39d2abbed5ce6183979/docs/11-手册/README.md)或[文档中心](https://github.com/xiiiblue/hive-os/blob/4d4f9090aeac6638c424c39d2abbed5ce6183979/docs/README.md)。
+回到[全部手册](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/11-手册/README.md)或[文档中心](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/README.md)。

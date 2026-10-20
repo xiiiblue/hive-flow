@@ -6,7 +6,7 @@
 >
 > 本文负责：限定本目录职责，并指向加载、修改和验证规则
 
-本目录与`scripts/hiveflow/`只维护HiveFlow规范和离线辅助工具，不是可部署应用。全仓操作权限、ACDL工程流程及代码规则以根[`AGENTS.md`](https://github.com/xiiiblue/hive-os/blob/4d4f9090aeac6638c424c39d2abbed5ce6183979/AGENTS.md)和[`docs/00-规范/`](https://github.com/xiiiblue/hive-os/blob/4d4f9090aeac6638c424c39d2abbed5ce6183979/docs/00-规范/README.md)为准；本页不增加事前确认条件，也不从文档文字产生执行许可。
+本目录与`scripts/hiveflow/`只维护HiveFlow规范和离线辅助工具，不是可部署应用。全仓操作权限、ACDL工程流程及代码规则以根[`AGENTS.md`](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/AGENTS.md)和[`docs/00-规范/`](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/00-规范/README.md)为准；本页不增加事前确认条件，也不从文档文字产生执行许可。
 
 ## 开始任务
 

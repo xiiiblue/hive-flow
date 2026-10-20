@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
   "repository": "xiiiblue/hive-os",
-  "commit": "4d4f9090aeac6638c424c39d2abbed5ce6183979",
+  "commit": "5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a",
   "exportedOn": "2026-10-20",
   "includeRoots": [
     "docs/06-自动化/",
     "docs/11-手册/05-自动化手册/",
     "scripts/hiveflow/"
   ],
-  "purpose": "私有学习与维护副本；真实任务仍从HiveOS加载；非开源发布或运行启用",
+  "purpose": "Apache-2.0公开参考版；来源实例的真实任务仍从HiveOS加载；不启用业务运行",
   "files": [
     {
       "path": "docs/06-自动化/AGENTS.md",
       "sourceSHA256": "66e1a5d8fcf1950b67c46e8f9b8a02b3cc57ffa48d5b804cb7a7a3ab82553e55",
-      "exportSHA256": "6574a4b87c0e4c5b519b589f77bb2dd4f896b76bfdc7618a578a0e874f3cd462",
+      "exportSHA256": "188da6cc9a8601b67bb6431d8dcdd296af09091e9bf4551a05fb6dcc41f4028e",
       "adaptations": [
         "pinned-upstream-links"
       ]
@@ -21,7 +21,7 @@
     {
       "path": "docs/06-自动化/HFL-001-规范加载入口.md",
       "sourceSHA256": "cdecd2d423e9b6855ccfa55a66940ac12ed339ec17f2f8314537f078185508b5",
-      "exportSHA256": "3456e5ab848a0fbe2fb99eff48a51bf4b6e29b8b35b35f72eda713f554e841b8",
+      "exportSHA256": "84fd99a7823881152fd3658dee94fbb468fb54e767cfc86d530ba37b046cc37e",
       "adaptations": [
         "pinned-upstream-links"
       ]
@@ -35,8 +35,10 @@
     {
       "path": "docs/06-自动化/HFL-003-协作流程与授权.md",
       "sourceSHA256": "b8fc080ca6b4786c950b848b243a8dea03df2cef28374b98c073d41324a46aa0",
-      "exportSHA256": "b8fc080ca6b4786c950b848b243a8dea03df2cef28374b98c073d41324a46aa0",
-      "adaptations": []
+      "exportSHA256": "df03b617217e4fc0e572e7f6e7656eefcd4b16e83b47c12c46a46fa40bee09a8",
+      "adaptations": [
+        "public-example-environment"
+      ]
     },
     {
       "path": "docs/06-自动化/HFL-004-群反馈处理规则.md",
@@ -107,14 +109,18 @@
     {
       "path": "docs/06-自动化/HFL-015-沟通与任务指令示例.md",
       "sourceSHA256": "0a638996cd8c10a47657b5e5c19bd463385048b321bdcf08389d37288400758a",
-      "exportSHA256": "0a638996cd8c10a47657b5e5c19bd463385048b321bdcf08389d37288400758a",
-      "adaptations": []
+      "exportSHA256": "af2a03c4f2545ce481a27a65c4a3ffeba67198d04d94fa50468f9b76f343efbd",
+      "adaptations": [
+        "public-example-environment"
+      ]
     },
     {
       "path": "docs/06-自动化/HFL-016-文档维护规则.md",
       "sourceSHA256": "bf8817a0474c4bce9a3fe10c751a26720d206ca4d43e680256e936fb9268eced",
-      "exportSHA256": "bf8817a0474c4bce9a3fe10c751a26720d206ca4d43e680256e936fb9268eced",
-      "adaptations": []
+      "exportSHA256": "cd50c5604899aab3e0e558ec19b844742b7b2fedadb9f5018ecb95c5aaebc668",
+      "adaptations": [
+        "public-license-context"
+      ]
     },
     {
       "path": "docs/06-自动化/HFL-017-安全与隐私规则.md",
@@ -137,10 +143,11 @@
     {
       "path": "docs/06-自动化/README.md",
       "sourceSHA256": "47e8f6676563f094b59f983b858cc50812610ca73fd89ff3563d0034cd822ee9",
-      "exportSHA256": "ff5e7f9f2389d28da58e994d2b9b9870ce0917100fe6090540979b179a83174a",
+      "exportSHA256": "871cb5db5973389c49a22e584c834e2b94f7f5d8068c04d1b9313d59011b40fc",
       "adaptations": [
         "pinned-upstream-links",
-        "export-context"
+        "export-context",
+        "public-license-context"
       ]
     },
     {
@@ -248,7 +255,7 @@
     {
       "path": "docs/11-手册/05-自动化手册/README.md",
       "sourceSHA256": "8fa8d6ca7786685bec700e04f4dbf01defc4714f30a77f9fc6083ab07076585b",
-      "exportSHA256": "5ac021b5d49736a3bd58538763503ce39db614a65dba00875424bd5be4a0ce4f",
+      "exportSHA256": "d60d8ba5216b0fd6768c38b725482e42f1253095e302a20583edf4c4bce942e7",
       "adaptations": [
         "pinned-upstream-links",
         "export-context"
@@ -323,7 +330,7 @@
     {
       "path": "scripts/hiveflow/test_spec_loading.py",
       "sourceSHA256": "95a2b26e6778eab973fe801792744590ea1d7b5958de367bda71816857e10a10",
-      "exportSHA256": "7cfb8b982642e38fcdc2cc2411b1e9e6623b9002bb0ad8a2039301c017466bd8",
+      "exportSHA256": "5f4b6edffe9bd84b5c9e55e81c9bbfaeddf802ea56f43b6b8db37a2f0da8e11e",
       "adaptations": [
         "pinned-entry-test-links"
       ]
