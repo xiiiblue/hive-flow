@@ -1,67 +1,69 @@
 # HiveFlow
 
-HiveFlow 是源自蜂巢实践的研发协作规范，探索从 Director 逐步协调，走向授权边界内的流程自动承接。先调查反馈，由负责人决定是否采纳；实施时一次说清范围，完成后按证据交付。当前自动开发尚未启用。
+HiveFlow把反馈、采纳决定、研发和交付结果连起来。云端dots调查并登记GitHub Issue，Issue之后由Director的MacMini上的Codex承接；手动启动和原生定时任务，都可以选择PR待审或完整交付。当前业务自动执行尚未启用。
 
-它复用现成的理解、工单和沟通能力，不从零构建模型、工单系统或即时通信平台，也不提供新的业务服务或任务调度器。
+本仓库是HiveFlow的**私有固定版本副本**，用于独立阅读、离线检查和未来开放前的整理。唯一权威规范仍在HiveOS的`docs/06-自动化/`，介绍手册是网站的原始材料；内容依赖为**HiveFlow规范→HiveFlow介绍→HiveFlow网站**。真实任务继续从HiveOS核验版本和加载规则，本仓库不重新成为调度入口。
 
-HiveFlow is an agent collaboration specification, not a deployable service. The documentation is currently maintained in Chinese.
-
-## 复用现成能力
-
-|能力|在 HiveFlow 中的职责|
-|---|---|
-|Dots 及其可用模型|理解问题、调查事实、整理方案与协调工作；复用账号可用的先进模型能力，具体模型以账号和平台支持为准|
-|GitHub Issues|管理 Bug、需求和交付线索；登记、采纳与实施分别核验，不把工单状态当作执行许可|
-|企业微信与独立桥接|作为日常工作沟通入口，经 [wecom-slack-bridge](https://github.com/xiiiblue/wecom-slack-bridge)连接到已授权响应方；桥接只传输消息，不判断业务或调用模型|
-
-这些是规范中的职责分配，不表示任意账户、工作群或集成已经接通。管理员须分别完成现有平台的接入与授权。
-
-规范仓库维护规则与指南；[展示网站](https://www.bluexiii.com/flow/)由独立的 [flow 仓库](https://github.com/xiiiblue/flow)维护并发布审阅后的公开快照。网站不是运行服务，也不会修改群配置或工具权限。
+当前副本来源：HiveOS提交`4d4f9090aeac6638c424c39d2abbed5ce6183979`。原始摘要、导出摘要及少量导航整理见[来源清单](export-manifest.json)。未导入HiveOS业务源码、宿主配置、消息记录或运行数据。
 
 ## 从哪里开始
 
-|你要做什么|阅读|
+|你关心什么|阅读位置|
 |---|---|
-|每次任务加载当前规范|[统一加载入口](docs/SPEC_ENTRY.md)、[加载契约](docs/SPEC_LOADING.md)|
-|第一次安装理解与离线演练|[快速开始](docs/QUICKSTART.md)|
-|记录采纳/拒绝/暂缓与交付收尾|[事项状态与结项](docs/ITEM_LIFECYCLE.md)|
-|在企微群提问、报 Bug、提需求|[用户使用指南](docs/USER_GUIDE.md)|
-|了解角色、授权、审阅/完整交付两种终点|[核心流程](docs/WORKFLOW.md#交付模式)|
-|准备两种原生定时任务及采纳选单|[自动化模板](docs/AUTOMATION_DESIGN.md#两种可复制原生任务模板)，规范与离线辅助，未启用|
-|处理群咨询、Bug 或需求|[群入口](docs/GROUP_INTAKE.md)|
-|在已授权范围内缓存与静态查询代码|[云端过滤源码快照](docs/SOURCE_SNAPSHOTS.md)|
-|把规范映射到现有工具|[工具适配](docs/ADAPTERS.md)|
-|写清楚通知和追问|[交互示例](docs/OWNER_COMMANDS.md)|
-|核对边界与验证程度|[验收清单](docs/ACCEPTANCE.md)|
-|修改规范|[贡献说明](CONTRIBUTING.md)、[项目规则](AGENTS.md)|
+|第一次了解，想按场景读懂整套方法|[介绍手册目录](docs/11-手册/05-自动化手册/README.md)，包含12章正文和3篇附录|
+|Issue之后在哪里做，Director需要介入几次|[流程总览](docs/11-手册/05-自动化手册/03-流程总览：一条反馈怎样走到交付.md#9director需要介入几次)|
+|停在PR待审，还是完成合并、部署和验收|[两种交付终点](docs/06-自动化/HFL-003-协作流程与授权.md#交付模式)|
+|查正式规则及每份文档的职责|[HFL规范目录](docs/06-自动化/README.md)，共19份编号正文|
+|理解原生定时任务、受控采纳和认领|[HFL-009](docs/06-自动化/HFL-009-原生自动化任务模板.md)、[HFL-010](docs/06-自动化/HFL-010-采纳记录与任务认领.md)，模板保持暂停|
+|维护这个副本，或核对它与HiveOS的差异|[副本维护与同步](docs/维护/EXP-001-副本维护与同步.md)|
+|了解以后开源还要做什么|[公开前准备清单](docs/维护/EXP-002-公开前准备清单.md)|
+|核对本次实际检查和未验证范围|[验证记录](docs/维护/EXP-003-验证记录.md)|
 
-本仓库没有需要安装或启动的应用。文档检查只需要 Git 和 Python 3.9+：
+[展示网站](https://www.bluexiii.com/flow/)及[flow网站仓库](https://github.com/xiiiblue/flow)提供公开介绍。网站取材于介绍手册，不直接把私有执行协议或运行记录发布出去。
 
-```sh
-python3 scripts/check_docs.py
+## 四种组合，两个独立选择
+
+|本地启动|PR待审|完整交付|
+|---|---|---|
+|手动|Director发起1次；开发、检查和PR完成后停止，再介入1次处理合并、部署|Director明确完整范围并授权1次，正常路径连续推进到约定交付|
+|原生定时任务|有效配置内无需逐单发起；每单PR完成后仍需介入1次|有效配置内无需逐单发起或例行确认后续步骤|
+
+这里只统计Issue进入MacMini后的研发阶段；源头采纳、定时配置批准与启用另计。完整交付仍须真实完成规定审阅和约定验收，约定本人验收、出现新的重要取舍或超出授权时，按实际情况再介入。不能把次数当作授权，也不能把已有模板当作业务自动执行已启用。
+
+## 目录与离线工具
+
+```text
+AGENTS.md                         本副本的维护入口
+export-manifest.json              固定来源及逐文件摘要
+docs/06-自动化/                   HFL-001至HFL-019、目录与机器清单
+docs/11-手册/05-自动化手册/        介绍手册正文及附录
+docs/维护/                       副本维护、公开准备及验证记录
+scripts/hiveflow/                 来自HiveOS的离线工具与测试
+scripts/sync_from_hiveos.py       从已选HiveOS提交更新副本
+scripts/check_repository.py       全仓链接、来源摘要与常见敏感形态检查
 ```
 
-受控采纳的固定位置、dots 生产与 Codex 认领见[单槽契约](docs/ADOPTION_RECORDS.md)。本仓库不保存运行记录；当前控制分支/文件尚未创建。
+Python3.9+和Git即可完成文档及纯数据检查，不需要安装业务服务。macOS先设置`TMPDIR=/tmp`；本机优先使用已配置的Miniconda解释器。
 
-## 当前采用的方式
+```sh
+export TMPDIR=/tmp
+python3 -B scripts/check_repository.py
+python3 -B scripts/hiveflow/test_spec_loading.py
+python3 -B -m unittest discover -s scripts/hiveflow -p 'test_*.py'
+python3 -B scripts/test_export.py
+git diff --check
+```
 
-- 群反馈采纳评审与 dots 协调任务的授权、私有结果在 **dots 原生本人主对话**；本人直接 Mac mini Codex 手动实施按 [本人直接入口](docs/WORKFLOW.md#本人直接-codex-手动入口)在实际宿主核验，不迁回 dots 重审；企微审批和历史执行许可均不启用。
-- 管理员接入并授权的工作群用于咨询、反馈和可公开的登记回执；适用范围以实际接入配置为准，群内容不授予研发执行权限。
-- dots 先在自己的云端核对固定仓库代码/文档；必要的环境查询由已连接的 Mac mini Codex medium 受限只读完成。
-- 手动任务按有效授权分阶段推进。**自动开发关闭**；普通“继续”、既有反馈任务或历史批准都不能开启它。
-- 通用 [wecom-slack-bridge](https://github.com/xiiiblue/wecom-slack-bridge) 独立维护，采用传统接收确认与主动普通回复。流式演示已撤回；本规范不保证原生引用、真正 @ 人或群消息自动续接。
-- 不进行主动额度查询、余额阈值或快照门禁；实际平台失败仍须如实报告，不盲重试。
+工具只在明确指定的本地目录中执行离线数据处理或合成演练，不自动配置任务、建Issue、发送回执、部署服务或申请权限。需要本地桥接仓库与依赖缓存的接入演练单独选择，本次纯规范同步不运行真实平台链路。
 
-仓库地址、群/成员标识、环境地址和账户权限保留在各宿主已有的受控配置中。采用本规范不会获得这些权限，也不会自动修改已启用任务。具体能力与未验事项见 [适配状态](docs/ADAPTERS.md#能力与验证状态)。
+## 副本怎样保持可信
 
-## 维护与发布边界
+规范和工具先在HiveOS修改并验证，再按完整提交导出。本仓库保留上游目录结构和HFL编号；未收录的ACDL、HiveOS根规则与其他手册，链接固定到同一上游提交，访问仍需原有私有权限。
 
-当前文件只保留在用规范和文档检查。退役的 Node 应用、旧命令协议、自动开发设计与迁移流水保留在 Git 历史，不再提供启动入口；未提交的本地旧实现不能被当成已发布代码。
+[来源清单](export-manifest.json)分别记录原始字节和整理后字节的SHA-256，不把导航改写冒充逐字复制。业务规则与离线工具不在本副本另行修改；副本维护工具和说明由本仓库维护。源文档中的Accepted、Review、日期和验收事实均属于来源版本，不代表在本仓库重新验收或持续有效。源规范中针对HiveOS的`pnpm`命令和根AGENTS要求仍适用于HiveOS，本仓库检查使用上面的命令。
 
-规范变更不等于部署生效、集成通过或取得执行授权。公开前仍需审阅 Git 历史与第三方权利；本次整理不改变仓库可见性，不发版。
+旧英文正文和旧应用从Git历史追溯，当前树不保留第二份规则或旧加载兼容入口；文件名对照见[HFL-018](docs/06-自动化/HFL-018-来源迁移与路径对照.md)。
 
-**许可证尚未选定，仓库没有 LICENSE 文件。** 发布为开源项目前须由负责人决定许可及贡献授权方式，本仓库不预设该决定。敏感信息处理见 [安全说明](SECURITY.md)。
+## 当前仍闭源
 
-手动研发交付及 [默认 HTTP 收尾](docs/MANUAL_DELIVERY.md#默认交付收尾)由 hive-flow 统一维护：先识别现有可信绑定，实际交付/验收完成后自动生成必要脱敏回执；无绑定正常结束注明，不扩大合并部署等当次权限。默认 Mac mini Codex 手动处理，自动开发保持关闭。
-
-后续自动研发采用 [Codex 桌面原生 Automations](docs/AUTOMATION_DESIGN.md)：指定本地 HiveOS 项目、原生 worktree、任务指令及 ACTIVE/PAUSED；不自建 CLI 调度或批次控制层。本人已在本地创建 PAUSED 配置；业务范围、期限、数量和启用未获完整配置/授权，实际 prompt 与运行历史尚待原生核验；互斥、停止和去重按实测或流程约束说明，不构成硬隔离保证。
+仓库继续私有，尚未选择开源许可证或开放外部贡献。未添加LICENSE，也未修改仓库可见性、分支权限或发布设置。历史、附件、权利、产品专用事实及私密报告方式仍需在正式开放前逐项审阅，不能把“当前文件检查通过”写成“整个历史已可公开”。维护方式见[贡献说明](CONTRIBUTING.md)，敏感问题见[安全说明](SECURITY.md)。

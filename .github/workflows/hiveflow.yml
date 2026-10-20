@@ -1,0 +1,26 @@
+name: HiveFlow offline contracts
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -B scripts/check_repository.py
+      - run: python3 -B scripts/hiveflow/test_spec_loading.py
+      - run: python3 -B scripts/hiveflow/test_source_snapshot.py
+      - run: python3 -B scripts/hiveflow/test_diagnostic_boundaries.py
+      - run: python3 -B scripts/hiveflow/test_delivery.py
+      - run: python3 -B scripts/hiveflow/test_adoption_record.py
+      - run: python3 -B scripts/hiveflow/test_migration.py
+      - run: python3 -B scripts/test_export.py
+      - run: git diff --check

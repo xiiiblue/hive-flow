@@ -17,3 +17,6 @@ __pycache__/
 *.py[cod]
 
 rehearsal-result.json
+
+.verification/
+.hive-verification/
