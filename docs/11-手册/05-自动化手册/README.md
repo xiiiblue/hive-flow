@@ -25,9 +25,11 @@ HiveFlow是一套让人和智能体共同完成这段工作的协作方法。它
 
 ## 2.与蜂巢、ACDL和网站的关系
 
-蜂巢是这套方法形成和实践的项目背景。ACDL负责需求、设计、实施、评审和版本的工程协作；HiveFlow负责反馈入口、采纳与授权的衔接、任务交付终点及原来源回执。需要了解工程方法时，可以并读[ACDL研发流程手册](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/11-手册/02-研发流程手册/README.md)。
+蜂巢是这套方法形成和实践的项目背景。ACDL负责需求、设计、实施、评审和版本的工程协作；HiveFlow负责反馈入口、采纳与授权的衔接、任务交付终点及原来源回执。需要了解工程方法时，可以并读[ACDL研发流程手册](https://github.com/xiiiblue/hive-os/blob/a3e7c38a12b26c2b19a8a687c169c778e1bbe4f6/docs/11-手册/02-研发流程手册/README.md)。
 
 HiveFlow的唯一权威执行规范在[自动化目录](../../06-自动化/README.md)。本手册将规则解释成连续教程和案例；独立[flow网站仓库](https://github.com/xiiiblue/flow)应以本手册为原始材料，整理[展示网站](https://www.bluexiii.com/flow/)的公开内容。
+
+独立[hive-flow仓库](https://github.com/xiiiblue/hive-flow)已于2026-10-20按[Apache-2.0](https://github.com/xiiiblue/hive-flow/blob/main/LICENSE)开源，提供规范参考副本、介绍与离线工具。公开读者不需要访问私有HiveOS即可学习和试用；业务实例的源码访问、执行授权与启用状态仍分别核验。
 
 内容依赖为**HiveFlow规范→HiveFlow介绍→HiveFlow网站**，维护规则由[HFL-016](../../06-自动化/HFL-016-文档维护规则.md#规范介绍与网站的依赖顺序)定义。规范改变时，先确认正式规则，再同步手册和网站。网站介绍不反过来授权真实操作，也不能替代项目当前记录。具体取材范围、章节映射和来源版本要求见[附录C](15-附录C：网站取材与内容维护.md)。
 
@@ -103,12 +105,12 @@ PR之后的介入，可以由Director自己操作，也可以在MacMini的可信
 
 实际控制记录、原生任务、权限和真实链路要分别核验。带日期的接入事实与未验收范围见[HFL-019](../../06-自动化/HFL-019-接入与验收记录.md)，怎样阅读这些证据见第12章。本书不会把历史状态直接当作所有环境的当前状态。
 
-本书12章正文和3篇附录均保持Review状态。案例是合成材料，不代表产品承诺、真实授权、已完成开发或已通过验收；网站按独立仓库的实际发布版本核验，本副本不代表网站实时状态。
+本书12章正文和3篇附录均保持Review状态。案例是合成材料，不代表产品承诺、真实授权、已完成开发或已通过验收。网站已公开，采用内容与发布状态按网站仓库的来源记录及实际页面核验，本手册不代表网站的实时版本。
 
 ## 8.从理解转向执行
 
-Agent实际工作仍先读取目标仓库的`AGENTS.md`，再从[HFL-001：规范加载入口](../../06-自动化/HFL-001-规范加载入口.md)选择intake、review或delivery路线，核验真实仓库、完整版本和任务所需规则。工程规范从[ACDL规范入口](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/00-规范/README.md)选择，不要求每项任务通读全部材料。
+Agent实际工作仍先读取目标仓库的`AGENTS.md`，再从[HFL-001：规范加载入口](../../06-自动化/HFL-001-规范加载入口.md)选择intake、review或delivery路线，核验真实仓库、完整版本和任务所需规则。工程规范从[ACDL规范入口](https://github.com/xiiiblue/hive-os/blob/a3e7c38a12b26c2b19a8a687c169c778e1bbe4f6/docs/00-规范/README.md)选择，不要求每项任务通读全部材料。
 
 本手册依据同一HiveOS提交中的现行规范展开，章节末尾列出直接依据。规范与介绍同步维护；网站取材时记录包含两者同步修订的完整提交及采用章节，不从旧写作基线推断已经包含新规则。
 
-回到[全部手册](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/11-手册/README.md)或[文档中心](https://github.com/xiiiblue/hive-os/blob/5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a/docs/README.md)。
+回到[全部手册](https://github.com/xiiiblue/hive-os/blob/a3e7c38a12b26c2b19a8a687c169c778e1bbe4f6/docs/11-手册/README.md)或[文档中心](https://github.com/xiiiblue/hive-os/blob/a3e7c38a12b26c2b19a8a687c169c778e1bbe4f6/docs/README.md)。

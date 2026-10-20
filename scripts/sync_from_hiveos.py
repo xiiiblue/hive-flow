@@ -120,19 +120,10 @@ def export_entry_path(link):
         text = text.replace(old, '本目录是HiveOS现行规范的固定版本副本；唯一权威来源仍为HiveOS的`docs/06-自动化/`，本仓库不作为业务任务读取来源。')
         changes.append('export-context')
     if name == 'docs/11-手册/05-自动化手册/README.md':
-        old = '本次只完善介绍文档，网站内容与发布尚未同步。'
-        assert old in text, '上游手册状态说明变化，需要重新审阅'
-        text = text.replace(old, '网站按独立仓库的实际发布版本核验，本副本不代表网站实时状态。')
-        changes.append('export-context')
+        assert '本手册不代表网站的实时版本。' in text, '上游手册状态说明变化，需要重新审阅'
     if '51.8' in text:
         text = text.replace('51.8', '示例开发环境')
         changes.append('public-example-environment')
-    if name == 'docs/06-自动化/README.md':
-        text = text.replace('许可证尚未选定；公开、贡献授权及历史内容审阅见HFL-016和', '本公开副本采用根LICENSE中的Apache-2.0；贡献方式见根CONTRIBUTING.md，来源规则与历史审阅见HFL-016和')
-        changes.append('public-license-context')
-    if name == 'docs/06-自动化/HFL-016-文档维护规则.md':
-        text = text.replace('许可证和外部贡献授权方式尚未确定，正式开放前由负责人决定；公开可见或提交PR不自动产生许可。', '来源版本的许可决定属于HiveOS维护范围；本公开副本已按根LICENSE采用Apache-2.0，贡献方式见根CONTRIBUTING.md。')
-        changes.append('public-license-context')
     return text.encode('utf-8'), changes
 
 

@@ -9,6 +9,14 @@ from test_spec_loading import validate_manifest
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / 'docs/06-自动化'
+PUBLIC_LICENSE_URL = 'https://github.com/xiiiblue/hive-flow/blob/main/LICENSE'
+
+
+def retired_runtime_links(text):
+    """公开许可证是分发声明；其它旧仓库文件入口仍不能作为执行依据。"""
+    return [match.group(0) for match in re.finditer(
+        r'https://github\.com/xiiiblue/hive-flow/(?:blob|raw|tree)/[^\s)\'"<>]+', text)
+        if match.group(0) != PUBLIC_LICENSE_URL]
 
 
 class MigrationTests(unittest.TestCase):
@@ -80,12 +88,21 @@ class MigrationTests(unittest.TestCase):
             for path in folder.iterdir():
                 if path.suffix not in ('.md','.py','.mjs'): continue
                 text=path.read_text()
-                self.assertNotRegex(text,r'https://github\.com/xiiiblue/hive-flow/(?:blob|raw|tree)/')
+                self.assertEqual(retired_runtime_links(text), [], path.name)
                 self.assertNotRegex(text,r"REPO\s*=\s*['\"]xiiiblue/hive-flow")
                 self.assertNotRegex(text,r'python3(?: -B)? scripts/(?!hiveflow/)[a-z_]+\.py')
         root=(ROOT/'AGENTS.md').read_text()
         self.assertIn('docs/06-自动化/HFL-001-规范加载入口.md',root)
         self.assertNotIn('xiiiblue/hive-flow',root)
+
+    def test_public_license_exception_rejects_runtime_and_nearby_paths(self):
+        self.assertEqual(retired_runtime_links(f'[Apache-2.0]({PUBLIC_LICENSE_URL})'), [])
+        base = PUBLIC_LICENSE_URL.split('/blob/')[0] + '/'
+        for suffix in ('blob/main/docs/SPEC_ENTRY.md', 'raw/main/LICENSE',
+                       'tree/main/docs', 'blob/main/LICENSE/extra',
+                       'blob/main/LICENSE?path=docs'):
+            with self.subTest(suffix=suffix):
+                self.assertEqual(retired_runtime_links(base + suffix), [base + suffix])
 
     def test_pure_tools_compile_without_import_side_effects(self):
         for path in (ROOT/'scripts/hiveflow').glob('*.py'):

@@ -77,7 +77,7 @@ printf '%s\n' '{"operation":"initialize","record":null,"expectedBlobSHA":null,"o
 
 ## 来源、边界与维护关系
 
-内容来自HiveOS提交`5d71f33176eb4ab4788e1c875b1a3eb3bf5bd22a`。上游规范是蜂巢实例的权威执行规则；本仓库是经过公开整理的参考版本。来源文档中的Accepted、Review、日期和现场状态属于原实例，其他项目按自己的实际证据确认。
+内容来自HiveOS提交`a3e7c38a12b26c2b19a8a687c169c778e1bbe4f6`。上游规范是蜂巢实例的权威执行规则；本仓库是经过公开整理的参考版本。来源文档中的Accepted、Review、日期和现场状态属于原实例，其他项目按自己的实际证据确认。
 
 [来源清单](export-manifest.json)分别记录原始字节、公开整理后字节和调整原因。公开整理包括导航、许可语境与示例环境名称，不导入业务源码、凭据、原始消息或运行配置。维护链路为规范→介绍→网站→独立仓库；修改来源规则与修复本仓库公开说明分别记录。
 
@@ -87,4 +87,4 @@ HiveFlow与[ACDL](https://github.com/xiiiblue/hive-acdl)配合：ACDL组织工�
 
 本仓库文档与代码按[Apache License 2.0](LICENSE)提供，来源声明见[NOTICE](NOTICE)。欢迎使用、改编和贡献有依据的改进；提交前请读[贡献说明](CONTRIBUTING.md)。
 
-问题与复现使用合成数据；凭据、私人消息、用户/群身份、业务数据和敏感运行信息不要提交到公开Issue。安全问题遵循[安全说明](SECURITY.md)。项目状态与检查范围见[验证记录](docs/维护/EXP-003-验证记录.md)，公开维护检查见[EXP-002](docs/维护/EXP-002-公开前准备清单.md)。
+问题与复现使用合成数据；凭据、私人消息、用户/群身份、业务数据和敏感运行信息不要提交到公开Issue。安全问题遵循[安全说明](SECURITY.md)。项目状态与检查范围见[验证记录](docs/维护/EXP-003-验证记录.md)，公开维护检查见[EXP-002](docs/维护/EXP-002-公开维护检查清单.md)。
