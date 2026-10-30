@@ -114,7 +114,7 @@ class MigrationTests(unittest.TestCase):
     def test_human_handbook_has_navigation_and_no_private_material(self):
         path=ROOT/'docs/11-手册/05-自动化手册/README.md'
         text=path.read_text()
-        for marker in ('PR待审','完整交付','dots','Codex','桥接','采纳','验收','暂停','恢复','尚未启用'):
+        for marker in ('PR待审','完整交付','Hermes','Codex','Webhook','2.0','远程开发机','采纳','验收','暂停','恢复','尚未启用'):
             self.assertIn(marker,text)
         for name,pattern in SECRET_PATTERNS.items():
             self.assertIsNone(re.search(pattern,text),name)

@@ -20,7 +20,7 @@ def classify(facts):
         return 'refuse_group_terminal'
     if facts['sensitive_data'] or facts['whole_config_or_log']:
         return 'refuse_sensitive_read'
-    if (not facts['owner_dots_scope'] or not facts['target_matches_development_scope']
+    if (not facts['owner_trusted_scope'] or not facts['target_matches_development_scope']
             or not facts['tool_allowed']):
         return 'stop_scope_or_permission'
     if not facts['risk_known'] or not facts['independent_parameters']:
@@ -45,7 +45,7 @@ def disclose(read_result, public_for_this_group, same_group):
 
 class DiagnosticBoundaryTests(unittest.TestCase):
     def setUp(self):
-        self.safe = {'entry': 'group_intake', 'owner_dots_scope': True,
+        self.safe = {'entry': 'group_intake', 'owner_trusted_scope': True,
                      'target_matches_development_scope': True, 'tool_allowed': True,
                      'risk_known': True, 'independent_parameters': True,
                      'group_supplied_execution_parameters': False, 'personal_target': False,
@@ -101,7 +101,7 @@ class DiagnosticBoundaryTests(unittest.TestCase):
         self.check('stop_unknown', risk_known=False)
         self.check('stop_scope_or_permission', tool_allowed=False)
         self.check('stop_scope_or_permission', target_matches_development_scope=False)
-        self.check('stop_scope_or_permission', owner_dots_scope=False, claimed_no_malice=True)
+        self.check('stop_scope_or_permission', owner_trusted_scope=False, claimed_no_malice=True)
 
     def test_hourly_issue_review_does_not_gain_environment_scope(self):
         self.check('issue_only_no_environment_query', entry='issue_review')
@@ -119,7 +119,7 @@ class DiagnosticBoundaryTests(unittest.TestCase):
         self.assertNotIn('请求Mac mini Codex核对相关版本、健康和必要脱敏日志', intake)
         for text in [adapter, intake]:
             for phrase in ['实际副作用', '数据风险', '模型展示名', '启用状态', '可选关系',
-                           '功能开关', '费用', '创建会话', '本人dots', '小时review', '自动开发']:
+                           '功能开关', '费用', '创建会话', '本人已批准', '小时review', '自动开发']:
                 with self.subTest(phrase=phrase):
                     self.assertIn(phrase, text)
         self.assertIn('安全查询与对群披露分开判断', adapter)

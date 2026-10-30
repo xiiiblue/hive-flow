@@ -67,8 +67,32 @@ def validate_export(root, manifest):
 
 
 def adapt(name, raw, commit, included):
-    """修正导航、来源上下文和测试路径识别；业务规则及业务工具保持原文。"""
+    """登记公开导航、环境别名、离线传输和合成测试适配；不改变授权与状态规则。"""
     base = 'https://github.com/' + REPOSITORY + '/blob/' + commit + '/'
+    if name == 'scripts/hiveflow/test_migration.py':
+        text = raw.decode('utf-8')
+        assert "'203'" in text, '上游手册角色测试变化，需要重新审阅'
+        return text.replace("'203'", "'远程开发机'").encode(), ['public-environment-alias-test']
+    if name == 'scripts/hiveflow/control_store.py':
+        text = raw.decode('utf-8')
+        marker = "    def api(self, endpoint, method='GET', payload=None):\n"
+        assert text.count(marker) == 1, '上游联网入口变化，需要重新审阅'
+        text = text.replace(marker, marker + "        raise RuntimeError('Public reference export disables live GitHub transport; use authorized business repository')\n", 1)
+        return text.encode(), ['public-offline-transport']
+    if name == 'scripts/hiveflow/test_execution_control.py':
+        text = raw.decode('utf-8')
+        marker = "        root = Path(__file__).resolve().parents[2]\n"
+        old = "content = registry.encode() if path.endswith('ISSUE/README.md') else (root/path).read_bytes()"
+        assert marker in text and old in text, '上游登记测试变化，需要重新审阅'
+        block = '<!-- HIVE-ISSUE-SYNC:START -->\n> 正式状态：In Progress\n<!-- HIVE-ISSUE-SYNC:END -->'
+        fixtures = {
+            'scripts/workflows/manage-issue.mjs': 'export function managedIssueBlock() { return '+json.dumps(block)+'; }',
+            'scripts/lib/governance/issue-registry.mjs': 'export function extractIssueRows() { return [{external:"[#12](https://github.com/xiiiblue/hive-os/issues/12)"}]; }',
+        }
+        text = text.replace(marker, "        # 公开副本只测同步核验契约；真实HiveOS生成器集成仍由上游验证。\n        generator_fixtures = " + repr(fixtures) + "\n", 1)
+        text = text.replace(old, "content = registry.encode() if path.endswith('ISSUE/README.md') else generator_fixtures[path].encode()", 1)
+        text = text.replace('test_sync_verifier_uses_shared_source_and_committed_generator', 'test_sync_verifier_uses_shared_source_and_synthetic_generator')
+        return text.encode(), ['public-synthetic-generator-test']
     if name == 'scripts/hiveflow/test_spec_loading.py':
         text = raw.decode('utf-8')
         marker = 'ROOT = Path(__file__).resolve().parents[2]\n'
@@ -122,8 +146,12 @@ def export_entry_path(link):
     if name == 'docs/11-手册/05-自动化手册/README.md':
         assert '本手册不代表网站的实时版本。' in text, '上游手册状态说明变化，需要重新审阅'
     if '51.8' in text:
-        text = text.replace('51.8', '示例开发环境')
+        text = text.replace('51.8开发环境', '示例开发环境').replace('51.8', '示例开发环境')
         changes.append('public-example-environment')
+    if re.search(r'(?<![0-9])203(?![0-9])', text):
+        text = re.sub(r'(?<![0-9])203(?![0-9])', '远程开发机', text)
+        text = text.replace('远程开发机是现有远程开发机的环境名称，真实地址、账号与私有配置只放环境记录。', '真实机器名称、地址、账号与私有配置只放来源实例的环境记录。')
+        changes.append('public-environment-alias')
     return text.encode('utf-8'), changes
 
 
@@ -150,7 +178,7 @@ def plan(source, commit):
         files[name] = output
         rows.append({'path': name, 'sourceSHA256': digest(raw), 'exportSHA256': digest(output), 'adaptations': changes})
     manifest = {'schemaVersion': 1, 'repository': REPOSITORY, 'commit': commit,
-                'exportedOn': datetime.date.today().isoformat(), 'includeRoots': list(PREFIXES),
+                'exportedOn': datetime.date.today().isoformat(), 'edition': '2.0', 'includeRoots': list(PREFIXES),
                 'purpose': 'Apache-2.0公开参考版；来源实例的真实任务仍从HiveOS加载；不启用业务运行', 'files': rows}
     return files, manifest
 

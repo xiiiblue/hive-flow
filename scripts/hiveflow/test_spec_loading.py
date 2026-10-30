@@ -16,122 +16,14 @@ ROOT = Path(__file__).resolve().parents[2]
 def export_entry_path(link):
     path = link.split('#')[0]
     if '://' in path:
-        base = 'https://github.com/xiiiblue/hive-os/blob/51926b24b9607dc504c2f43cb23f933d5e407fad/'
+        base = 'https://github.com/xiiiblue/hive-os/blob/91cb6a7faee207456f3437620957da08bbc84f79/'
         require(path.startswith(base), 'export link has different source')
         path = path[len(base):]
         require('..' not in PurePosixPath(path).parts, 'export link leaves source')
         return path
     return posixpath.normpath(str(PurePosixPath('docs/06-自动化', path)))
-REPO = 'xiiiblue/hive-os'
-MANIFEST = 'docs/06-自动化/spec-manifest.json'
-COMMON = {'docs/06-自动化/HFL-001-规范加载入口.md', 'docs/06-自动化/HFL-002-规范加载规则.md', MANIFEST}
-RETIRED_ENTRIES = {
-    'docs/06-自动化/SPEC_ENTRY.md': 'docs/06-自动化/HFL-001-规范加载入口.md',
-    'docs/06-自动化/SPEC_LOADING.md': 'docs/06-自动化/HFL-002-规范加载规则.md',
-}
-SCENARIOS = {'intake', 'review', 'delivery'}
-
-
-class Blocked(ValueError):
-    pass
-
-
-def require(condition, reason):
-    if not condition:
-        raise Blocked(reason)
-
-
-def digest(data):
-    return hashlib.sha256(data).hexdigest()
-
-
-def validate_manifest(manifest, scenario):
-    require(set(manifest) == {'schema_version', 'repo', 'common', 'scenarios'}, 'manifest fields')
-    require(type(manifest['schema_version']) is int and manifest['schema_version'] == 1, 'schema')
-    require(manifest['repo'] == REPO, 'repo')
-    require(set(manifest['scenarios']) == SCENARIOS and scenario in SCENARIOS, 'scenario')
-    require(set(manifest['common']) == COMMON, 'common files')
-    for group in [manifest['common'], *manifest['scenarios'].values()]:
-        require(isinstance(group, dict) and bool(group), 'empty file set')
-        for path, sections in group.items():
-            p = PurePosixPath(path)
-            require(str(p) == path and not p.is_absolute() and '..' not in p.parts
-                    and '\\' not in path and ':' not in path and '#' not in path
-                    and (path == 'AGENTS.md' or path == MANIFEST
-                         or (p.parts[:2] == ('docs', '06-自动化') and p.suffix == '.md')), 'path outside spec')
-            require(isinstance(sections, list) and bool(sections)
-                    and all(isinstance(s, str) and s for s in sections)
-                    and ('*' not in sections or sections == ['*']), 'sections')
-    files = dict(manifest['common'])
-    require(not (set(files) & set(manifest['scenarios'][scenario])), 'duplicate files')
-    files.update(manifest['scenarios'][scenario])
-    return files
-
-
-def git(area, *args):
-    return subprocess.check_output(['git', *args], cwd=area, stderr=subprocess.DEVNULL)
-
-
-def local_metadata(area):
-    # Local origin is identity evidence, not an authentication/permission grant.
-    try:
-        origin = git(area, 'config', '--get', 'remote.origin.url').decode().strip()
-        sha = git(area, 'rev-parse', 'HEAD').decode().strip()
-    except subprocess.CalledProcessError as error:
-        raise Blocked('local project identity unavailable') from error
-    allowed = {'https://github.com/' + REPO, 'https://github.com/' + REPO + '.git',
-               'git@github.com:' + REPO, 'git@github.com:' + REPO + '.git'}
-    require(origin in allowed and re.fullmatch('[0-9a-f]{40}', sha), 'unexpected local origin/HEAD')
-    return dict(source='local_git', repo=REPO, origin_repository=REPO, sha=sha,
-                observed_at='actual-local-git-observation', evidence='git origin and HEAD; fixed-SHA reads')
-
-
-def load(area, metadata, scenario, cache=None, fault=None, conflict=False):
-    # Metadata is a synthetic input. This function does NOT authenticate GitHub.
-    require(metadata.get('repo') == REPO and metadata.get('observed_at') and metadata.get('evidence'), 'unverified metadata')
-    sha = metadata.get('sha', '')
-    require(type(sha) is str and re.fullmatch('[0-9a-f]{40}', sha) is not None, 'unknown version')
-    if metadata.get('source') == 'local_git':
-        actual = local_metadata(area)
-        require(actual['sha'] == sha and metadata.get('origin_repository') == REPO, 'local project/version mismatch')
-    else:
-        require(metadata.get('source') in (None, 'github') and metadata.get('private') is True
-                and metadata.get('default_branch'), 'unverified remote metadata')
-    require(not conflict, 'conflict')
-
-    def read(path):
-        require(fault not in {'denied', 'read_failed'}, 'read blocked')
-        try:
-            row = git(area, 'ls-tree', sha, '--', path).decode().split()
-            require(bool(row) and row[0] == '100644', 'missing file, symlink or unexpected object')
-            data = git(area, 'show', f'{sha}:{path}')
-        except subprocess.CalledProcessError as error:
-            raise Blocked('fixed SHA read failed') from error
-        require(fault != 'truncated', 'incomplete response')
-        require(fault != 'wrong_sha', 'response version mismatch')
-        return data
-
-    manifest = json.loads(read(MANIFEST))
-    files = validate_manifest(manifest, scenario)
-    key = [REPO, sha, scenario, manifest['schema_version'], sorted(files)]
-    if cache is not None:
-        require(cache['key'] == key and set(cache['contents']) == set(files), 'cache identity/set')
-    contents, receipts = {}, []
-    for path, sections in files.items():
-        # Opening cached full bytes models actual content retrieval, not a read flag.
-        data = cache['contents'][path] if cache is not None else read(path)
-        require(isinstance(data, bytes) and bool(data), 'empty content')
-        if cache is not None:
-            require(cache['digests'][path] == digest(data), 'cache integrity')
-        text = data.decode('utf-8')
-        headings = re.findall(r'^#{1,6} (.+)$', text, re.M)
-        require(sections == ['*'] or all(s in headings for s in sections), 'missing section')
-        contents[path] = data
-        receipts.append({'sha': sha, 'path': path, 'sections': sections, 'sha256': digest(data),
-                         'source': 'cache' if cache is not None else 'fixed_sha_git_show', 'result': 'complete'})
-    return {'key': key, 'contents': contents, 'digests': {p: digest(d) for p, d in contents.items()},
-            'receipts': receipts, 'load_result': 'success', 'event_result': 'unprocessed'}
-
+from spec_loader import (REPO, MANIFEST, COMMON, RETIRED_ENTRIES, SCENARIOS, Blocked,
+                         require, digest, validate_manifest, git, local_metadata, load, selected_text)
 
 def action(load_result, authorized=False, read_only=False, adopted=False, seen=False, unknown=False):
     # Synthetic decision only: no external write/dispatch function exists here.
@@ -163,6 +55,8 @@ def main():
         paths = set()
         for scenario in SCENARIOS:
             paths.update(validate_manifest(manifest, scenario))
+        for group in manifest.get('phases', {}).values():
+            paths.update(group)
         for path in sorted(RETIRED_ENTRIES):
             test('retired_entry_absent_' + PurePosixPath(path).stem,
                  lambda retired=ROOT / path: not retired.exists() and not retired.is_symlink(), True)
@@ -208,20 +102,42 @@ def main():
         cache = load(area, metadata, 'intake')
         test('same_sha_full_cache', lambda: load(area, metadata, 'intake', cache)['load_result'], 'success')
         test('intake_loads_binding_only', lambda:
-             manifest['scenarios']['intake'].get('docs/06-自动化/HFL-006-研发交付与原群回执.md'), ['先绑定真实来源'])
+             manifest['scenarios']['intake'].get('docs/06-自动化/HFL-006-研发交付与原群回执.md'), ['Hermes来源关联'])
         test('intake_excludes_execution_route', lambda:
              not {'AGENTS.md', 'docs/06-自动化/HFL-003-协作流程与授权.md'} & set(validate_manifest(manifest, 'intake')), True)
-        binding_text = cache['contents']['docs/06-自动化/HFL-006-研发交付与原群回执.md'].decode().split('## 先绑定真实来源\n', 1)[1].split('\n## ', 1)[0]
-        test('intake_binding_ack_and_failure_contract', lambda:
-             all(term in binding_text for term in ['request到期前', '[wecom:source-bind]',
-                 'source_bound |', '失败或未知', '不能声称可跨天回执', 'source-binding-status',
-                 'binding_active=1', '真实bridge App']), True)
+        binding_text = cache['contents']['docs/06-自动化/HFL-006-研发交付与原群回执.md'].decode().split('## Hermes来源关联\n', 1)[1].split('\n## ', 1)[0]
+        test('intake_hermes_source_and_failure_contract', lambda:
+             all(term in binding_text for term in ['真实原来源', '成功读回', '不再发送Slack source-bind',
+                 '跨天', '未经批准', '建单未知', '私聊隔离']), True)
         workflow = load(area, metadata, 'delivery')['contents']['docs/06-自动化/HFL-003-协作流程与授权.md'].decode()
         manual_entry = workflow.split('## 本人直接Codex手动入口\n', 1)[1].split('\n## ', 1)[0]
         test('direct_manual_entry_requires_host_identity_scope', lambda:
-             all(term in manual_entry for term in ['本地执行宿主', '本人身份/权限可核验', '完整范围',
-                 '无须迁回dots重新批准', 'Issue/PR评论', 'dots不能替外部会话',
-                 '仅消费GitHub交付证据', '不开启自动开发']), True)
+             all(term in manual_entry for term in ['实际可信人类用户通道', '本人、权限及本次范围',
+                 '不迁回Hermes重审', '根AGENTS.md']), True)
+
+        for phase in manifest['phases']:
+            test('phase_' + phase, lambda p=phase: load(area, metadata, 'delivery', phase=p)['load_result'], 'success')
+        test('base_delivery_excludes_notification_protocol', lambda:
+             'docs/06-自动化/HFL-007-HTTP回执接口.md' not in validate_manifest(manifest, 'delivery'), True)
+        for route in ('intake', 'review'):
+            test(route + '_formal_receipt_loads_notify', lambda r=route:
+                 load(area, metadata, r, phase='notify')['load_result'], 'success')
+        notification = load(area, metadata, 'delivery', phase='notify')
+        selected = validate_manifest(manifest, 'delivery', 'notify')
+        receipt_path = 'docs/06-自动化/HFL-006-研发交付与原群回执.md'
+        webhook_path = 'docs/06-自动化/HFL-007-HTTP回执接口.md'
+        receipt_text = selected_text(notification['contents'][receipt_path].decode(), selected[receipt_path])
+        webhook_text = selected_text(notification['contents'][webhook_path].decode(), selected[webhook_path])
+        test('current_receipt_does_not_load_legacy_send', lambda:
+             '## 选择单一通知路径' not in receipt_text and '## GitHub交付记录' in receipt_text
+             and '即时答疑与正式回执' in receipt_text, True)
+        test('webhook_load_includes_mentions_and_current_recovery', lambda:
+             all(t in webhook_text for t in ['文本回执与成员提醒', '当前发布操作与恢复', '--resume-notice'])
+             and 'POST /v1/receipts' not in webhook_text, True)
+        test('review_cannot_load_automation', lambda: load(area, metadata, 'review', phase='automation'), blocked=True)
+        test('unknown_phase', lambda: load(area, metadata, 'delivery', phase='unexpected'), blocked=True)
+        legacy = copy.deepcopy(manifest); legacy.pop('phases'); legacy['schema_version'] = 1
+        test('schema1_read_compatibility', lambda: bool(validate_manifest(legacy, 'delivery')), True)
 
         for field, value in [('sha', ''), ('private', False), ('repo', 'other/spec'), ('default_branch', ''), ('evidence', '')]:
             test('metadata_' + field, lambda f=field, v=value: load(area, dict(metadata, **{f: v}), 'intake'), blocked=True)
@@ -249,7 +165,7 @@ def main():
         for mutation in ['schema', 'missing_scenario', 'unknown_scenario', 'includes', 'outside', 'url', 'source', 'absolute']:
             altered = copy.deepcopy(manifest)
             if mutation == 'schema':
-                altered['schema_version'] = 2
+                altered['schema_version'] = 99
             elif mutation == 'missing_scenario':
                 del altered['scenarios']['review']
             elif mutation == 'unknown_scenario':

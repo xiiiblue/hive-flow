@@ -24,6 +24,42 @@ class ExportTests(unittest.TestCase):
                          'files': [{'path': NAME, 'sourceSHA256': digest(self.files[NAME]),
                                     'exportSHA256': digest(self.files[NAME]), 'adaptations': []}]}
 
+    def test_public_transport_refuses_before_starting_any_process(self):
+        from unittest.mock import patch
+        root = Path(__file__).resolve().parents[1]
+        sys.path.insert(0, str(root / 'scripts/hiveflow'))
+        self.addCleanup(sys.path.pop, 0)
+        from control_store import GitHubStore
+        with patch('subprocess.run', side_effect=AssertionError('network process started')) as call:
+            with self.assertRaisesRegex(RuntimeError, 'disables live GitHub'):
+                GitHubStore()
+            store = GitHubStore.__new__(GitHubStore)
+            for method in ('GET', 'PUT'):
+                with self.assertRaisesRegex(RuntimeError, 'disables live GitHub'):
+                    store.api('repos/example/project', method)
+            call.assert_not_called()
+
+    def test_public_control_clis_refuse_without_invoking_gh(self):
+        import os
+        root = Path(__file__).resolve().parents[1]
+        fake_bin = self.root / 'bin'; fake_bin.mkdir()
+        called = self.root / 'gh-called'
+        gh = fake_bin / 'gh'
+        gh.write_text('#!/bin/sh\nprintf called > "'+str(called)+'"\nexit 99\n')
+        gh.chmod(0o755)
+        issue = self.root / 'issue.json'; issue.write_text('{}')
+        commands = [
+            ['execution_control.py', 'acquire', '--run-id', 'synthetic-run', '--mode', 'pr_review'],
+            ['source_evidence.py', 'save', '--issue-json', str(issue), '--actor', 'example', '--boundary', '2026-01-01T00:00:00Z'],
+            ['source_evidence.py', 'verify', '--issue-json', str(issue), '--actor', 'example', '--boundary', '2026-01-01T00:00:00Z'],
+        ]
+        for command in commands:
+            result = subprocess.run([sys.executable, '-B', str(root/'scripts/hiveflow'/command[0]), *command[1:]],
+                                    capture_output=True, text=True, env=dict(os.environ, PATH=str(fake_bin)+os.pathsep+os.environ['PATH']))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('disables live GitHub', result.stdout+result.stderr)
+            self.assertFalse(called.exists())
+
     def test_exact_copy_and_check_leave_bytes_unchanged(self):
         sync(self.root, self.files, self.manifest)
         before = (self.root / 'export-manifest.json').read_bytes()
