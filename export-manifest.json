@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "xiiiblue/hive-os",
-  "commit": "91cb6a7faee207456f3437620957da08bbc84f79",
+  "commit": "65cfb248fd2fdd4b26cc6ce9d70ae575060ae041",
   "exportedOn": "2026-10-31",
   "edition": "2.0",
   "includeRoots": [
@@ -14,7 +14,7 @@
     {
       "path": "docs/06-自动化/AGENTS.md",
       "sourceSHA256": "2d49584ed5b91ea6e373d1704e8d2548c9b16cb0b18f89d21043ba305ee6978e",
-      "exportSHA256": "c5734106f4229b1c8c52c54e1b926cec7395ef53218c3988ccb37583c906934a",
+      "exportSHA256": "3c3e17fc124224fcc094d39f8b914ef68a227f22cf434f0219b137943fc52f00",
       "adaptations": [
         "pinned-upstream-links"
       ]
@@ -22,7 +22,7 @@
     {
       "path": "docs/06-自动化/HFL-001-规范加载入口.md",
       "sourceSHA256": "701d658fd5a1b7fd277cc2df1603a85f6c6cd792d98ccddac3c07f8b6292a341",
-      "exportSHA256": "c203a716f6e344df31dd00679468c523be618b7a75b84aa44510e3fa4fe51b54",
+      "exportSHA256": "bcee6010ec6ff783569367aae2bfbd11520943ae994070c82628e23d89d542ac",
       "adaptations": [
         "pinned-upstream-links"
       ]
@@ -35,8 +35,8 @@
     },
     {
       "path": "docs/06-自动化/HFL-003-协作流程与授权.md",
-      "sourceSHA256": "5f42e3e753fe52b61e7cc2bb9dd9c717ed3393fdbfa9d7e8f827510d3e787fe0",
-      "exportSHA256": "8b13453cc32fe9e607e73e6e657197270bfe9e4e606e06519a252de6756e3ea8",
+      "sourceSHA256": "2a0e65192a673ab10baa7cf9bdc2187cf494828a89c14235c283e4dab092c54d",
+      "exportSHA256": "7c9a3013ace583593c784dd7a5cb9b4775033b3a50aa60226c41f2b8dc83712b",
       "adaptations": [
         "pinned-upstream-links",
         "public-example-environment",
@@ -69,7 +69,7 @@
     {
       "path": "docs/06-自动化/HFL-007-HTTP回执接口.md",
       "sourceSHA256": "058c1b22efbf3f3d3a8afee06e9f24763bc03c0eac2d06c0ec535629cb0ad116",
-      "exportSHA256": "b11ee1d5803b616f1c377ec06f1396657386cbab2600f634f685d93cfab023c0",
+      "exportSHA256": "d7269d80f729101d229fd3b4ad5d3830d2b302a42c7e290047b8112c00799f95",
       "adaptations": [
         "pinned-upstream-links",
         "public-example-environment",
@@ -86,8 +86,8 @@
     },
     {
       "path": "docs/06-自动化/HFL-009-原生自动化任务模板.md",
-      "sourceSHA256": "66e173c7f931f3382651f1c8a9d5bbf852bac94097c466c74e4ab27890ccda01",
-      "exportSHA256": "f1c57ab5acac11302fadf7992855efdff2fdb2c50ce9239f4669266b0f11e14a",
+      "sourceSHA256": "5e4b9e33f80139037b9dc3803d872da0c15eec55328dbd6ae6965701349def6a",
+      "exportSHA256": "e03bd11747a74e8a28782c75d75b0b9644c934aee924b364eb63c5ef6ff9c12a",
       "adaptations": [
         "public-environment-alias"
       ]
@@ -106,8 +106,8 @@
     },
     {
       "path": "docs/06-自动化/HFL-012-检查与验收清单.md",
-      "sourceSHA256": "7075a3d1b9d581eb941632305eb176f1f2c6f71d4cdc5a5ebb1713bf50013b13",
-      "exportSHA256": "5f57d6b56b9b8208130edc6b7377b4534e6593803b090bd6c82ffa3583a4bc11",
+      "sourceSHA256": "c2a5c989992ca6179858038cb6c3efd694a13b66b7a8b30b21447cb21b491b27",
+      "exportSHA256": "748b795a40d5b1766e32512c70915d1990fa77d10e0289ba31acdc1b1592441d",
       "adaptations": [
         "public-example-environment",
         "public-environment-alias"
@@ -129,10 +129,11 @@
     },
     {
       "path": "docs/06-自动化/HFL-015-沟通与任务指令示例.md",
-      "sourceSHA256": "c94c0929ab20d57d91fc636b5852352ad47267935401f20d4c2fae988e7ac50c",
-      "exportSHA256": "ce7ee342d88e017ae0e88abe06536e4b18be79805a41c27181fb1d5ff2950e97",
+      "sourceSHA256": "ae86331ff12180fd38d8db46a35064291d83ae6cbcdc139f5a2f9893c77c6b2c",
+      "exportSHA256": "8183de685e87aad4d29ddb49e10f7b9c1d892e5b9330a0af1c5f2229f7ab8519",
       "adaptations": [
-        "public-example-environment"
+        "public-example-environment",
+        "public-environment-alias"
       ]
     },
     {
@@ -155,8 +156,8 @@
     },
     {
       "path": "docs/06-自动化/HFL-019-接入与验收记录.md",
-      "sourceSHA256": "8351f7916196fe0ae515fdfb98cf22e8828bdc2189a08b1906d59f8fe5ff88bb",
-      "exportSHA256": "af865ac2385de64603bc80e3f225898f9413280c0a83a6d272b544dc298739a9",
+      "sourceSHA256": "b68b575cfd8d9e90c72eeb8b7590263f92cd754033faddebb11d08b795ddb651",
+      "exportSHA256": "6341ef638e64f11d9bc1547ec1e73c785e52d7627bfa4d647da178b8ac7d23ae",
       "adaptations": [
         "public-example-environment",
         "public-environment-alias"
@@ -164,28 +165,28 @@
     },
     {
       "path": "docs/06-自动化/HFL-020-通用采纳选单与逐单执行.md",
-      "sourceSHA256": "a8433b455b390b013b02985a53812fe56f02dff7330e1fe416a35a4907c8f627",
-      "exportSHA256": "a8433b455b390b013b02985a53812fe56f02dff7330e1fe416a35a4907c8f627",
+      "sourceSHA256": "bf8acdaf1b42151e0e5858f82ac951185c2812bd021bc3cdb37029d377ec5507",
+      "exportSHA256": "bf8acdaf1b42151e0e5858f82ac951185c2812bd021bc3cdb37029d377ec5507",
       "adaptations": []
     },
     {
       "path": "docs/06-自动化/HFL-021-执行占用与接棒.md",
-      "sourceSHA256": "9dfd4e822a2f519e34c4f94e1ffcd88a803458000a58ecb523af34def5792ff3",
-      "exportSHA256": "9dfd4e822a2f519e34c4f94e1ffcd88a803458000a58ecb523af34def5792ff3",
+      "sourceSHA256": "9b1bd44a8808a53c58d38faa58975eaba42900484c837cfa52aa5d540194d552",
+      "exportSHA256": "9b1bd44a8808a53c58d38faa58975eaba42900484c837cfa52aa5d540194d552",
       "adaptations": []
     },
     {
       "path": "docs/06-自动化/HFL-022-Hermes接入与双机协作.md",
-      "sourceSHA256": "b6ba467e539b32686743f39fef8454cce8d8536e6e0152d2f318a3460d2e37d2",
-      "exportSHA256": "eaf49742bc24cbd8d215da2b89058686f3ab12fce269b21682673a0eda4c3120",
+      "sourceSHA256": "a01616e7632dde88472c4f0cb41af89c22f6b50ca831645a2b76ac1f17cd0440",
+      "exportSHA256": "58bd993ee9279b1fe6fe64941c49536025c53b61c0b021a985ce578f2cab4d4f",
       "adaptations": [
         "public-environment-alias"
       ]
     },
     {
       "path": "docs/06-自动化/README.md",
-      "sourceSHA256": "4a9ef58280d75d34fa2122cc913b48e5bc2a1a42d1029f5d004af79ea74ba90a",
-      "exportSHA256": "be71a3b1633705f56320bc1d3406c798d667b6df62b6454ec52da7ebfe04d889",
+      "sourceSHA256": "039fb148ae17640e209312131d1c8268555b2389852ce5cb04f08086300c3a1d",
+      "exportSHA256": "a0650a154e5d037afbfe1d053609f83245e507275ac84b1b75bd17a36e581f1b",
       "adaptations": [
         "pinned-upstream-links",
         "export-context",
@@ -214,16 +215,16 @@
     },
     {
       "path": "docs/11-手册/05-自动化手册/02-角色与工具：每个参与者负责什么.md",
-      "sourceSHA256": "e8ed4a8b5b09a20ef317296c858fdc217922ff8dd481f2c3aed1f08f7dc8705b",
-      "exportSHA256": "234c3ce0ee253bcc081fe3d72d7821a15192ecf06bc717e827c3e1e31147fd4d",
+      "sourceSHA256": "7ec0f55d337e94573b2acdd32ca7cf080e8455108f3ee7db3086d155069c2856",
+      "exportSHA256": "88679ba003e5fabc861b74aa93e38d30a33db82a0d3d60af3bab9c98cb794822",
       "adaptations": [
         "public-environment-alias"
       ]
     },
     {
       "path": "docs/11-手册/05-自动化手册/03-流程总览：一条反馈怎样走到交付.md",
-      "sourceSHA256": "72201fc1075c4af0d262027b81275cfcbbe85d93d4a3a010c80d519445c85bac",
-      "exportSHA256": "16c274567f99ecdcd2f3c225be7a17aa19717de3f70cd5c51995fda057078c41",
+      "sourceSHA256": "51a98dff19f7e1ec7ba12993a9865174e097ddde2372b950c86f90b35e0b800e",
+      "exportSHA256": "c46eaa4a16c624f3a1f944c3d2eae9f9b62965a2c0464c1ac677ab38fce01a01",
       "adaptations": [
         "public-environment-alias"
       ]
@@ -265,11 +266,9 @@
     },
     {
       "path": "docs/11-手册/05-自动化手册/09-原生自动化：先配置范围，再选择新事项.md",
-      "sourceSHA256": "2bbd3edae3d28bcb053b2c23269122fc488b7563adf19d6e720a1f01ed6236ae",
-      "exportSHA256": "e68e7307fe9b84cdefb9d994a9bbe2bacdb0f6162f66d30f2a951129393d43b3",
-      "adaptations": [
-        "public-environment-alias"
-      ]
+      "sourceSHA256": "600d311d48f35e7be7b0b57b7923d7e60b031772f025cd3b1c3e4356673e35d5",
+      "exportSHA256": "600d311d48f35e7be7b0b57b7923d7e60b031772f025cd3b1c3e4356673e35d5",
+      "adaptations": []
     },
     {
       "path": "docs/11-手册/05-自动化手册/10-采纳交接：记录、认领、撤销和恢复.md",
@@ -287,24 +286,24 @@
     },
     {
       "path": "docs/11-手册/05-自动化手册/12-接入与验证：从离线演练到真实使用.md",
-      "sourceSHA256": "df5bebe43935636095ea7fb48c0d6ed94b08a0ae554e09820fcafc4dd7c1bec5",
-      "exportSHA256": "3220be9bf3fdee5149f9c2d876f4b74411ab2f2717a2df401bab275a54fdf19f",
+      "sourceSHA256": "a1b4336510cd5521ea513aff7a9a8d25255d935361376f7b403cf54d23c61fa4",
+      "exportSHA256": "1e78d6e1026f29d8fd0449d0b9ef50fdff28e84e9a670646c3a381b154d31591",
       "adaptations": [
         "public-environment-alias"
       ]
     },
     {
       "path": "docs/11-手册/05-自动化手册/13-附录A：术语、状态和常见问题.md",
-      "sourceSHA256": "caa03dadb522fb364eea3b628c4b1783ccbe673e18aaeac39e9a16e7b9393fe9",
-      "exportSHA256": "2689480e6dff21746b337807b964b8265ac6573d4e2193354acd17b77beacb39",
+      "sourceSHA256": "4a30dd9279a6cad31bc8faa4a4e704216d378e8427a89ad677acbe9143d3a2d7",
+      "exportSHA256": "293c9335be8dc9b804c27efc35c4ffa7a37663d0ca86a4416686797ab965d2ad",
       "adaptations": [
         "public-environment-alias"
       ]
     },
     {
       "path": "docs/11-手册/05-自动化手册/14-附录B：完整案例与对话示例.md",
-      "sourceSHA256": "f559bdaf309546823638e15da74dc94088c7eb1cd2d80b86babc7c3208df0c27",
-      "exportSHA256": "1abb7838f962aabd282260dabac34b644aa3574fccbf9b753131de0110ce997e",
+      "sourceSHA256": "cd5710b884b4dd6883dce54ef08894e447e3701902d824fdd0ed4c880544ac72",
+      "exportSHA256": "9a4b5d063951800a50a856d9e9f6daf75d5f1c7887f9106b12069d6e369f5485",
       "adaptations": [
         "public-environment-alias"
       ]
@@ -319,8 +318,8 @@
     },
     {
       "path": "docs/11-手册/05-自动化手册/README.md",
-      "sourceSHA256": "ce11cfd854e4bd6e1357dca29e5502fe4e41b08e3da886995ff3ae4e6ef48797",
-      "exportSHA256": "ec5f5c65c8a2aced8fd4eefe7b0965014a084cb8c7ed800bbbb1970f357cb369",
+      "sourceSHA256": "d3dcc0e27f5ea9b2a7a9a13fb367dbebea7edae1af027ec2818338bfabd46ddd",
+      "exportSHA256": "ee5e3c05818da7d8ce411d13c7dce8b959c85255f97fdd36e65719aa57eb3311",
       "adaptations": [
         "pinned-upstream-links",
         "public-environment-alias"
@@ -443,7 +442,7 @@
     {
       "path": "scripts/hiveflow/test_spec_loading.py",
       "sourceSHA256": "c56e66c39ca357eb0b0207687dfa93acc7f0d70e76c5e387a446b90efff5201e",
-      "exportSHA256": "caf72db29e54ed87af91f6f12eea4b9488afb4e1dac2abca93983d828f7bc65d",
+      "exportSHA256": "b4f733f45d99a4832d6fbf4b048793db1e2956880a700f8d1d9bfc60563a1832",
       "adaptations": [
         "pinned-entry-test-links"
       ]

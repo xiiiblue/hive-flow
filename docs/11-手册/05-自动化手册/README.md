@@ -27,7 +27,7 @@ HiveFlow是一套让人和智能体共同完成这段工作的协作方法。它
 
 ## 2.与蜂巢、ACDL和网站的关系
 
-蜂巢是这套方法形成和实践的项目背景。ACDL负责需求、设计、实施、评审和版本的工程协作；HiveFlow负责反馈入口、采纳与授权的衔接、任务交付终点及原来源回执。需要了解工程方法时，可以并读[ACDL研发流程手册](https://github.com/xiiiblue/hive-os/blob/91cb6a7faee207456f3437620957da08bbc84f79/docs/11-手册/02-研发流程手册/README.md)。
+蜂巢是这套方法形成和实践的项目背景。ACDL负责需求、设计、实施、评审和版本的工程协作；HiveFlow负责反馈入口、采纳与授权的衔接、任务交付终点及原来源回执。需要了解工程方法时，可以并读[ACDL研发流程手册](https://github.com/xiiiblue/hive-os/blob/65cfb248fd2fdd4b26cc6ce9d70ae575060ae041/docs/11-手册/02-研发流程手册/README.md)。
 
 HiveFlow的唯一权威执行规范在[自动化目录](../../06-自动化/README.md)。本手册将规则解释成连续教程和案例；独立[flow网站仓库](https://github.com/xiiiblue/flow)应以本手册为原始材料，整理[展示网站](https://www.bluexiii.com/flow/)的公开内容。
 
@@ -41,12 +41,14 @@ HiveFlow的唯一权威执行规范在[自动化目录](../../06-自动化/READM
 
 HiveFlow2.0以GitHub Issue交接研发。Hermes通过QueenBee接收企微反馈、调查和登记，在本人明确授权下协调远程开发机的Codex；Director直接协同MacMini上的Codex，Hermes不指导或调度MacMini。两处通过共享记录核对冲突、已有结果与接棒。
 
-本节解释[HFL-003定义的本地启动方式](../../06-自动化/HFL-003-协作流程与授权.md#issue交接与两种本地启动方式)及[Director介入时点](../../06-自动化/HFL-003-协作流程与授权.md#director介入时点)。两个执行入口都有两个独立选择：**手动或定时决定怎样启动，PR待审或完整交付决定做到哪里。** 它们可以组成四条路径：
+本节解释[HFL-003定义的本地启动方式](../../06-自动化/HFL-003-协作流程与授权.md#issue交接与两种本地启动方式)及[Director介入时点](../../06-自动化/HFL-003-协作流程与授权.md#director介入时点)。迁移后的自动路径由远程Hermes统一调度，MacMini保留本人直接协同。启动与终点仍是两个独立选择：**手动或定时决定怎样启动，PR待审或完整交付决定做到哪里。** 它们可以组成四条路径：
 
 |启动方式|PR待审|完整交付|
 |---|---|---|
 |手动|Director在本机下达任务；Codex完成开发、检查和PR后停止，Director再介入一次，决定并推进合并、部署|Director明确完整范围并授权；Codex连续完成必要审阅、修正、合并、约定环境交付、验收和收尾|
-|原生定时任务|执行宿主的原生任务在已批准且实际启用的配置内定时选单，完成PR后停止；Director仍需再介入一次处理合并、部署|执行宿主的原生任务在有效配置内选单并按完整终点推进，无需Director逐单再手动发起或例行确认后续步骤|
+|原生定时任务|Hermes在已批准且实际启用的配置内逐轮选单，完成PR后停止；Director仍需再介入一次处理合并、部署|Hermes在有效配置内逐轮选单并按完整终点推进，无需Director逐单再手动发起或例行确认后续步骤|
+
+Hermes统一跟踪远程Codex的真实执行；每轮一单，在完成核验、释放占用且窗口和上限允许后再开始下一轮。两种终点不是两套竞争的定时任务，长任务跟踪与停止规则见第9章。
 
 PR之后的介入，可以由Director自己操作，也可以在MacMini的可信执行会话中明确授权继续。完整交付中的代码审阅和业务验收仍需真实完成，但不天然要求Director本人逐步点击确认；约定由本人验收或出现超出授权的情况时，另行处理。
 
@@ -113,8 +115,8 @@ PR之后的介入，可以由Director自己操作，也可以在MacMini的可信
 
 ## 8.从理解转向执行
 
-Agent实际工作仍先读取目标仓库的`AGENTS.md`，再从[HFL-001：规范加载入口](../../06-自动化/HFL-001-规范加载入口.md)选择intake、review或delivery路线，核验真实仓库、完整版本和任务所需规则。工程规范从[ACDL规范入口](https://github.com/xiiiblue/hive-os/blob/91cb6a7faee207456f3437620957da08bbc84f79/docs/00-规范/README.md)选择，不要求每项任务通读全部材料。
+Agent实际工作仍先读取目标仓库的`AGENTS.md`，再从[HFL-001：规范加载入口](../../06-自动化/HFL-001-规范加载入口.md)选择intake、review或delivery路线，核验真实仓库、完整版本和任务所需规则。工程规范从[ACDL规范入口](https://github.com/xiiiblue/hive-os/blob/65cfb248fd2fdd4b26cc6ce9d70ae575060ae041/docs/00-规范/README.md)选择，不要求每项任务通读全部材料。
 
 本手册依据同一HiveOS提交中的现行规范展开，章节末尾列出直接依据。规范与介绍同步维护；网站取材时记录包含两者同步修订的完整提交及采用章节，不从旧写作基线推断已经包含新规则。
 
-回到[全部手册](https://github.com/xiiiblue/hive-os/blob/91cb6a7faee207456f3437620957da08bbc84f79/docs/11-手册/README.md)或[文档中心](https://github.com/xiiiblue/hive-os/blob/91cb6a7faee207456f3437620957da08bbc84f79/docs/README.md)。
+回到[全部手册](https://github.com/xiiiblue/hive-os/blob/65cfb248fd2fdd4b26cc6ce9d70ae575060ae041/docs/11-手册/README.md)或[文档中心](https://github.com/xiiiblue/hive-os/blob/65cfb248fd2fdd4b26cc6ce9d70ae575060ae041/docs/README.md)。
