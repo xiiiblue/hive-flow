@@ -74,6 +74,7 @@ printf '%s\n' '{"operation":"initialize","record":null,"expectedBlobSHA":null,"o
 |`adoption_record.py`|演示空闲、采纳、认领、取消及结果提案|来源实例的仓库/控制位置固定；不是任意项目可直接启用的调度器|
 |`source_snapshot.py`|按固定版本清单过滤文本源码、核对缓存和检索所需规则|输入来自调用方已有权限；不联网拉取，不执行业务代码|
 |`execution_control.py`、`source_evidence.py`|研究共享占用、接棒与需求基线|上游含私有GitHub读写入口；公开版无条件关闭真实传输，仅保留合成测试|
+|`wecom_notify.py`|固定配置预览、成员缓存、原通知查账与一次提交机制的参考实现|公开副本关闭真实HTTP发送和SSH读取，只用于本地数据与合成测试|
 |`test_*.py`|合成输入下的正例与拒绝路径|不替代真实宿主、账户、桥接及恢复验证|
 
 接入其他项目时，先选择适用方法，核验目标仓库、身份、权限和写入副作用；保留自己的AGENTS与环境规则。内置HiveOS适配是参考实例，不应直接替换字符串后就当作真实授权。

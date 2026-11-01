@@ -8,7 +8,7 @@
 
 HiveFlow是蜂巢的研发协作规范：接收反馈、调查事实、由负责人决定是否采纳，在明确授权内实施，最后按证据交付并反馈结果。它复用Hermes、企微、GitHub和Codex；固定群通知使用Webhook。MacMini由Director直接协同开发，远程开发机可由Hermes派发Codex。Dots、Slack及旧桥接退出当前入口。通用自动配置与真实执行分别核验；已有接入和验证范围见[接入与验收记录](HFL-019-接入与验收记录.md)。
 
-本目录是HiveOS现行规范的固定版本副本；唯一权威来源仍为HiveOS的`docs/06-自动化/`，本仓库不作为业务任务读取来源。[ACDL规范](https://github.com/xiiiblue/hive-os/blob/65cfb248fd2fdd4b26cc6ce9d70ae575060ae041/docs/00-规范/README.md)负责工程协作；本目录负责反馈、授权衔接、自动化任务和交付回执。独立hive-flow仅作按需导出副本，不作为任务读取来源。[HiveFlow手册](../11-手册/05-自动化手册/README.md)以12章正文和3篇附录解释流程，作为网站内容的原始材料，不另设执行规则；网站取材与版本维护见[手册附录C](../11-手册/05-自动化手册/15-附录C：网站取材与内容维护.md)。
+本目录是HiveOS现行规范的固定版本副本；唯一权威来源仍为HiveOS的`docs/06-自动化/`，本仓库不作为业务任务读取来源。[ACDL规范](https://github.com/xiiiblue/hive-os/blob/81376639ffedf5ad8754ae856658779daebc4d34/docs/00-规范/README.md)负责工程协作；本目录负责反馈、授权衔接、自动化任务和交付回执。独立hive-flow仅作按需导出副本，不作为任务读取来源。[HiveFlow手册](../11-手册/05-自动化手册/README.md)以12章正文和3篇附录解释流程，作为网站内容的原始材料，不另设执行规则；网站取材与版本维护见[手册附录C](../11-手册/05-自动化手册/15-附录C：网站取材与内容维护.md)。
 
 内容依赖固定为**HiveFlow规范→HiveFlow介绍→HiveFlow网站→独立hive-flow仓库**，维护顺序及各层责任见[HFL-016](HFL-016-文档维护规则.md#规范介绍与网站的依赖顺序)。Issue之后由远程开发机或MacMini承接研发，手动与定时都可选择PR待审或完整交付；唯一规则及Director介入次数见[HFL-003](HFL-003-协作流程与授权.md#issue交接与两种本地启动方式)。
 

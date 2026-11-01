@@ -6,7 +6,7 @@
 >
 > 本文负责：限定本目录职责，并指向加载、修改和验证规则
 
-本目录与`scripts/hiveflow/`维护HiveFlow规范、离线校验及既有私有控制分支工具，不是可部署应用。全仓操作权限、ACDL工程流程及代码规则以根[`AGENTS.md`](https://github.com/xiiiblue/hive-os/blob/65cfb248fd2fdd4b26cc6ce9d70ae575060ae041/AGENTS.md)和[`docs/00-规范/`](https://github.com/xiiiblue/hive-os/blob/65cfb248fd2fdd4b26cc6ce9d70ae575060ae041/docs/00-规范/README.md)为准；本页不增加事前确认条件，也不从文档文字产生执行许可。
+本目录与`scripts/hiveflow/`维护HiveFlow规范、离线校验及既有私有控制分支工具，不是可部署应用。全仓操作权限、ACDL工程流程及代码规则以根[`AGENTS.md`](https://github.com/xiiiblue/hive-os/blob/81376639ffedf5ad8754ae856658779daebc4d34/AGENTS.md)和[`docs/00-规范/`](https://github.com/xiiiblue/hive-os/blob/81376639ffedf5ad8754ae856658779daebc4d34/docs/00-规范/README.md)为准；本页不增加事前确认条件，也不从文档文字产生执行许可。
 
 当前企微入口及双机分工以[HFL-022](HFL-022-Hermes接入与双机协作.md)为准；MacMini由Director直接人机协同开发，不受Hermes调度。
 

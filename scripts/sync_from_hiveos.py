@@ -69,6 +69,17 @@ def validate_export(root, manifest):
 def adapt(name, raw, commit, included):
     """登记公开导航、环境别名、离线传输和合成测试适配；不改变授权与状态规则。"""
     base = 'https://github.com/' + REPOSITORY + '/blob/' + commit + '/'
+    if name == 'scripts/hiveflow/wecom_notify.py':
+        text = raw.decode('utf-8')
+        marker = 'LIVE_TRANSPORTS_ENABLED = True'
+        assert text.count(marker) == 1, '上游通知传输入口变化，需要重新审阅'
+        return text.replace(marker, 'LIVE_TRANSPORTS_ENABLED = False').encode(), ['public-offline-notifications']
+    if name == 'scripts/hiveflow/test_wecom_notify.py':
+        text = raw.decode('utf-8')
+        marker = '    def test_changed_approved_hash_refuses_before_sending(self):'
+        assert text.count(marker) == 1, '上游通知合成测试变化，需要重新审阅'
+        replacement = "    @patch.object(notify, 'LIVE_TRANSPORTS_ENABLED', True)\n" + marker
+        return text.replace(marker, replacement).encode(), ['public-synthetic-notification-test']
     if name == 'scripts/hiveflow/test_migration.py':
         text = raw.decode('utf-8')
         assert "'203'" in text, '上游手册角色测试变化，需要重新审阅'

@@ -60,6 +60,21 @@ class ExportTests(unittest.TestCase):
             self.assertIn('disables live GitHub', result.stdout+result.stderr)
             self.assertFalse(called.exists())
 
+    def test_public_notifications_disable_live_http_and_member_ssh(self):
+        from unittest.mock import patch
+        root = Path(__file__).resolve().parents[1]
+        name = 'scripts/hiveflow/wecom_notify.py'
+        raw = (root/name).read_bytes()
+        self.assertIn(b'LIVE_TRANSPORTS_ENABLED = False', raw)
+        module = {}
+        exec(compile(raw, name, 'exec'), module)
+        with patch('urllib.request.build_opener', side_effect=AssertionError('HTTP started')):
+            with self.assertRaisesRegex(module['NoticeError'], 'PUBLIC_REFERENCE_OFFLINE_ONLY'):
+                module['post_webhook']('https://example.invalid', b'{}')
+        with patch('subprocess.run', side_effect=AssertionError('SSH started')):
+            with self.assertRaisesRegex(module['NoticeError'], 'PUBLIC_REFERENCE_OFFLINE_ONLY'):
+                module['fetch_remote_members']({}, ['示例成员'])
+
     def test_exact_copy_and_check_leave_bytes_unchanged(self):
         sync(self.root, self.files, self.manifest)
         before = (self.root / 'export-manifest.json').read_bytes()
